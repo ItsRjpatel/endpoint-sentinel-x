@@ -43,6 +43,4 @@ class BaseEntity(Base, TimestampMixin):
     )
 
 
-# Import all models here to register them with metadata
-from app.db.models.organization import Organization  # noqa: E402, F401
-from app.db.models.user import User  # noqa: E402, F401
+# End of base entity definition
