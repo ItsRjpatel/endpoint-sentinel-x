@@ -9,6 +9,19 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.models.endpoint import Endpoint  # noqa: F401
 from app.db.models.enrollment_token import EnrollmentToken  # noqa: F401
+from app.db.models.inventory_category_state import InventoryCategoryState  # noqa: F401
+from app.db.models.inventory_disk import InventoryDisk  # noqa: F401
+from app.db.models.inventory_hardware import InventoryHardware  # noqa: F401
+from app.db.models.inventory_local_user import InventoryLocalUser  # noqa: F401
+from app.db.models.inventory_network_adapter import InventoryNetworkAdapter  # noqa: F401
+from app.db.models.inventory_network_address import InventoryNetworkAddress  # noqa: F401
+from app.db.models.inventory_os import InventoryOS  # noqa: F401
+from app.db.models.inventory_security_status import InventorySecurityStatus  # noqa: F401
+from app.db.models.inventory_service import InventoryService  # noqa: F401
+from app.db.models.inventory_software import InventorySoftware  # noqa: F401
+from app.db.models.inventory_sync_log import InventorySyncLog  # noqa: F401
+from app.db.models.inventory_volume import InventoryVolume  # noqa: F401
+from app.db.models.inventory_windows_update import InventoryWindowsUpdate  # noqa: F401
 from app.db.models.organization import Organization  # noqa: F401
 from app.db.models.user import User  # noqa: F401
 

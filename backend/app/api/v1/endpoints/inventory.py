@@ -1,0 +1,797 @@
+"""
+Inventory collection endpoints for Endpoint Sentinel X agents.
+
+Each endpoint represents exactly one inventory domain and is independently
+rate-limited, validated, and tracked via inventory_category_states and
+inventory_sync_logs for full auditability.
+"""
+
+from datetime import UTC, datetime
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models.endpoint import Endpoint
+from app.db.models.inventory_category_state import InventoryCategoryState
+from app.db.models.inventory_disk import InventoryDisk
+from app.db.models.inventory_hardware import InventoryHardware
+from app.db.models.inventory_local_user import InventoryLocalUser
+from app.db.models.inventory_network_adapter import InventoryNetworkAdapter
+from app.db.models.inventory_network_address import InventoryNetworkAddress
+from app.db.models.inventory_os import InventoryOS
+from app.db.models.inventory_security_status import InventorySecurityStatus
+from app.db.models.inventory_service import InventoryService
+from app.db.models.inventory_software import InventorySoftware
+from app.db.models.inventory_sync_log import InventorySyncLog
+from app.db.models.inventory_volume import InventoryVolume
+from app.db.models.inventory_windows_update import InventoryWindowsUpdate
+from app.dependencies.agent import get_current_agent
+from app.dependencies.database import get_db
+from app.schemas.inventory import (
+    HardwareInventoryRequest,
+    InventoryResponse,
+    LocalUsersInventoryRequest,
+    NetworkInventoryRequest,
+    OSInventoryRequest,
+    SecurityInventoryRequest,
+    ServicesInventoryRequest,
+    SoftwareInventoryRequest,
+    StorageInventoryRequest,
+    WindowsUpdatesInventoryRequest,
+)
+
+router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+MAX_PAYLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+async def _check_hash(
+    db: AsyncSession,
+    endpoint_id: int,
+    category: str,
+    incoming_hash: str,
+    collected_at: datetime,
+) -> InventoryCategoryState | None:
+    """Returns the existing state row if the hash matches (skip) or None if update needed."""
+    stmt = select(InventoryCategoryState).where(
+        InventoryCategoryState.endpoint_id == endpoint_id,
+        InventoryCategoryState.category == category,
+    )
+    result = await db.execute(stmt)
+    state = result.scalar_one_or_none()
+
+    if state:
+        if state.inventory_hash == incoming_hash:
+            return state  # Signal: skip
+        if state.collected_at > collected_at:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Stale inventory: server has a newer snapshot for category '{category}'",
+            )
+    return None  # Signal: proceed with update
+
+
+async def _upsert_category_state(
+    db: AsyncSession,
+    endpoint_id: int,
+    category: str,
+    inventory_hash: str,
+    agent_version: str | None,
+    collected_at: datetime,
+) -> None:
+    """Upserts the accepted hash state for a given (endpoint, category) pair."""
+    now = datetime.now(UTC)
+    stmt = (
+        pg_insert(InventoryCategoryState)
+        .values(
+            endpoint_id=endpoint_id,
+            category=category,
+            inventory_hash=inventory_hash,
+            agent_version=agent_version,
+            collected_at=collected_at,
+            last_synced_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_update(
+            constraint="uq_category_state",
+            set_={
+                "inventory_hash": inventory_hash,
+                "agent_version": agent_version,
+                "collected_at": collected_at,
+                "last_synced_at": now,
+                "updated_at": now,
+            },
+        )
+    )
+    await db.execute(stmt)
+
+
+async def _write_sync_log(
+    db: AsyncSession,
+    endpoint_id: int,
+    category: str,
+    sync_status: str,
+    inventory_hash: str | None,
+    agent_version: str | None,
+    collected_at: datetime | None,
+    started_at: datetime,
+    failure_reason: str | None = None,
+) -> None:
+    """Appends an audit row to inventory_sync_logs."""
+    now = datetime.now(UTC)
+    duration_ms = int((now - started_at).total_seconds() * 1000)
+    log = InventorySyncLog(
+        endpoint_id=endpoint_id,
+        category=category,
+        status=sync_status,
+        inventory_hash=inventory_hash,
+        agent_version=agent_version,
+        collected_at=collected_at,
+        started_at=started_at,
+        completed_at=now,
+        duration_ms=duration_ms,
+        failure_reason=failure_reason,
+    )
+    db.add(log)
+    await db.flush()
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/hardware
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/hardware", response_model=InventoryResponse, summary="Submit hardware inventory"
+)
+async def submit_hardware(
+    request: Request,
+    payload: HardwareInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "hardware"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(delete(InventoryHardware).where(InventoryHardware.endpoint_id == eid))
+    hw = payload.hardware
+    db.add(
+        InventoryHardware(
+            endpoint_id=eid,
+            cpu_model=hw.cpu_model,
+            cpu_cores=hw.cpu_cores,
+            cpu_threads=hw.cpu_threads,
+            total_ram_bytes=hw.total_ram_bytes,
+            system_manufacturer=hw.system_manufacturer,
+            system_model=hw.system_model,
+            bios_version=hw.bios_version,
+        )
+    )
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/os
+# ---------------------------------------------------------------------------
+
+
+@router.post("/inventory/os", response_model=InventoryResponse, summary="Submit OS inventory")
+async def submit_os(
+    request: Request,
+    payload: OSInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "os"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(delete(InventoryOS).where(InventoryOS.endpoint_id == eid))
+    os_data = payload.os
+    db.add(
+        InventoryOS(
+            endpoint_id=eid,
+            name=os_data.name,
+            version=os_data.version,
+            build_number=os_data.build_number,
+            architecture=os_data.architecture,
+            install_date=os_data.install_date,
+        )
+    )
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/security
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/security",
+    response_model=InventoryResponse,
+    summary="Submit security status inventory",
+)
+async def submit_security(
+    request: Request,
+    payload: SecurityInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "security"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(
+        delete(InventorySecurityStatus).where(InventorySecurityStatus.endpoint_id == eid)
+    )
+    sec = payload.security
+    db.add(
+        InventorySecurityStatus(
+            endpoint_id=eid,
+            antivirus_name=sec.antivirus_name,
+            antivirus_status=sec.antivirus_status,
+            firewall_enabled=sec.firewall_enabled,
+            bitlocker_enabled=sec.bitlocker_enabled,
+            secure_boot_enabled=sec.secure_boot_enabled,
+        )
+    )
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/network
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/network",
+    response_model=InventoryResponse,
+    summary="Submit network adapter inventory",
+)
+async def submit_network(
+    request: Request,
+    payload: NetworkInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "network"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    # Cascade delete handles addresses via FK
+    await db.execute(
+        delete(InventoryNetworkAdapter).where(InventoryNetworkAdapter.endpoint_id == eid)
+    )
+    for adapter_data in payload.adapters:
+        adapter = InventoryNetworkAdapter(
+            endpoint_id=eid,
+            name=adapter_data.name,
+            mac_address=adapter_data.mac_address,
+            is_physical=adapter_data.is_physical,
+            is_virtual=adapter_data.is_virtual,
+            adapter_type=adapter_data.adapter_type,
+            status=adapter_data.status,
+        )
+        db.add(adapter)
+        await db.flush()  # flush to get adapter.id
+        for addr in adapter_data.addresses:
+            db.add(
+                InventoryNetworkAddress(
+                    adapter_id=adapter.id,
+                    address=addr.address,
+                    family=addr.family,
+                    prefix_length=addr.prefix_length,
+                    is_loopback=addr.is_loopback,
+                )
+            )
+
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/storage
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/storage", response_model=InventoryResponse, summary="Submit storage inventory"
+)
+async def submit_storage(
+    request: Request,
+    payload: StorageInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "storage"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(delete(InventoryDisk).where(InventoryDisk.endpoint_id == eid))
+    await db.execute(delete(InventoryVolume).where(InventoryVolume.endpoint_id == eid))
+    for d in payload.disks:
+        db.add(
+            InventoryDisk(
+                endpoint_id=eid,
+                model=d.model,
+                serial_number=d.serial_number,
+                size_bytes=d.size_bytes,
+                interface_type=d.interface_type,
+            )
+        )
+    for v in payload.volumes:
+        db.add(
+            InventoryVolume(
+                endpoint_id=eid,
+                drive_letter=v.drive_letter,
+                label=v.label,
+                filesystem=v.filesystem,
+                size_bytes=v.size_bytes,
+                free_bytes=v.free_bytes,
+            )
+        )
+
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/software
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/software",
+    response_model=InventoryResponse,
+    summary="Submit installed software inventory",
+)
+async def submit_software(
+    request: Request,
+    payload: SoftwareInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "software"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(delete(InventorySoftware).where(InventorySoftware.endpoint_id == eid))
+    for s in payload.software:
+        db.add(
+            InventorySoftware(
+                endpoint_id=eid,
+                name=s.name,
+                version=s.version,
+                publisher=s.publisher,
+                install_date=s.install_date,
+            )
+        )
+
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/windows-updates
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/windows-updates",
+    response_model=InventoryResponse,
+    summary="Submit Windows Update inventory",
+)
+async def submit_windows_updates(
+    request: Request,
+    payload: WindowsUpdatesInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "windows-updates"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(
+        delete(InventoryWindowsUpdate).where(InventoryWindowsUpdate.endpoint_id == eid)
+    )
+    for u in payload.updates:
+        db.add(
+            InventoryWindowsUpdate(
+                endpoint_id=eid,
+                kb_id=u.kb_id,
+                title=u.title,
+                install_date=u.install_date,
+                status=u.status,
+            )
+        )
+
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/services
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/services", response_model=InventoryResponse, summary="Submit services inventory"
+)
+async def submit_services(
+    request: Request,
+    payload: ServicesInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "services"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(delete(InventoryService).where(InventoryService.endpoint_id == eid))
+    for svc in payload.services:
+        db.add(
+            InventoryService(
+                endpoint_id=eid,
+                name=svc.name,
+                display_name=svc.display_name,
+                startup_type=svc.startup_type,
+                status=svc.status,
+            )
+        )
+
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/local-users
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/local-users",
+    response_model=InventoryResponse,
+    summary="Submit local users inventory",
+)
+async def submit_local_users(
+    request: Request,
+    payload: LocalUsersInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "local-users"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(delete(InventoryLocalUser).where(InventoryLocalUser.endpoint_id == eid))
+    for u in payload.users:
+        db.add(
+            InventoryLocalUser(
+                endpoint_id=eid,
+                username=u.username,
+                is_active=u.is_active,
+                privilege=u.privilege,
+                last_login=u.last_login,
+            )
+        )
+
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
