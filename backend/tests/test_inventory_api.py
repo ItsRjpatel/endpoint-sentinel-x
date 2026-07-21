@@ -20,6 +20,7 @@ from app.db.models.inventory_hardware import InventoryHardware
 from app.db.models.inventory_network_adapter import InventoryNetworkAdapter
 from app.db.models.inventory_network_address import InventoryNetworkAddress
 from app.db.models.inventory_os import InventoryOS
+from app.db.models.inventory_service import InventoryService
 from app.db.models.inventory_software import InventorySoftware
 from app.db.models.inventory_sync_log import InventorySyncLog
 from app.db.models.inventory_windows_update import InventoryWindowsUpdate
@@ -393,6 +394,67 @@ async def test_submit_windows_updates(
 # Software inventory
 # ---------------------------------------------------------------------------
 
+
+# ---------------------------------------------------------------------------
+# Services inventory
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_submit_services(
+    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
+):
+    endpoint, secret = enrolled_agent
+    payload = {
+        "inventory_hash": "a" * 64,
+        "agent_version": "1.0.0",
+        "collected_at": "2024-01-01T00:00:00Z",
+        "services": [
+            {
+                "name": "wuauserv",
+                "display_name": "Windows Update",
+                "status": "Running",
+                "startup_type": "Auto",
+                "binary_path": "C:\\Windows\\system32\\svchost.exe -k netsvcs -p",
+                "service_account": "LocalSystem",
+                "delayed_auto_start": True,
+                "process_id": 1234,
+                "dependencies": ["rpcss"],
+                "dependent_services": [],
+            }
+        ],
+    }
+
+    headers = _agent_headers(endpoint, secret)
+
+    response = await client.post(
+        "/api/v1/inventory/services",
+        json=payload,
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+
+    # Verify db
+    result = await db_session.execute(
+        select(InventoryService).where(InventoryService.endpoint_id == endpoint.id)
+    )
+    services = result.scalars().all()
+    assert len(services) == 1
+    assert services[0].name == "wuauserv"
+    assert services[0].process_id == 1234
+
+    # Test idempotency
+    response2 = await client.post(
+        "/api/v1/inventory/services",
+        json=payload,
+        headers=headers,
+    )
+    assert response2.status_code == 200
+    assert response2.json()["status"] == "skipped"
+
+
+# ---------------------------------------------------------------------------
 # OS inventory
 # ---------------------------------------------------------------------------
 

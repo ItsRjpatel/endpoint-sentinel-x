@@ -393,17 +393,6 @@ class SoftwareInventoryRequest(InventoryMeta):
 # ---------------------------------------------------------------------------
 
 
-class ServicePayload(BaseModel):
-    name: str
-    display_name: str | None = None
-    startup_type: str | None = None
-    status: str | None = None
-
-
-class ServicesInventoryRequest(InventoryMeta):
-    services: list[ServicePayload] = Field(default_factory=list)
-
-
 # ---------------------------------------------------------------------------
 # Local Users
 # ---------------------------------------------------------------------------
@@ -418,3 +407,31 @@ class LocalUserPayload(BaseModel):
 
 class LocalUsersInventoryRequest(InventoryMeta):
     users: list[LocalUserPayload] = Field(default_factory=list)
+
+
+class ServicePayload(BaseModel):
+    name: str
+    display_name: str | None = None
+    description: str | None = None
+    status: str | None = None
+    startup_type: str | None = None
+    service_type: str | None = None
+    binary_path: str | None = None
+    service_account: str | None = None
+    delayed_auto_start: bool | None = None
+    process_id: int | None = None
+    dependencies: list[str] | None = None
+    dependent_services: list[str] | None = None
+    accept_stop: bool | None = None
+    accept_pause: bool | None = None
+    can_shutdown: bool | None = None
+    exit_code: int | None = None
+    service_flags: int | None = None
+    error_control: str | None = None
+    load_order_group: str | None = None
+    tag_id: int | None = None
+    trigger_start: bool | None = None
+
+
+class ServicesInventoryRequest(InventoryMeta):
+    services: list[ServicePayload] = Field(default_factory=list)

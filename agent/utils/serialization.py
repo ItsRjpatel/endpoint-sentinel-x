@@ -6,6 +6,8 @@ hashing and HTTP transmission.  Serialization must produce deterministic output
 so that the SHA-256 hash remains stable between runs when data is unchanged.
 """
 
+from typing import TYPE_CHECKING
+
 import structlog
 
 from models.inventory import (
@@ -15,6 +17,9 @@ from models.inventory import (
     SoftwareInventoryRequest,
     StorageInventoryRequest,
 )
+
+if TYPE_CHECKING:
+    from models.inventory import ServicesInventoryRequest, WindowsUpdatesInventoryRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -517,3 +522,56 @@ def serialize_windows_updates(inventory: "WindowsUpdatesInventoryRequest") -> di
 
     sorted_payloads = sorted(raw_payloads, key=_sort_key)
     return {"updates": sorted_payloads}
+
+
+def serialize_services(inventory: "ServicesInventoryRequest") -> dict:
+    """
+    Convert a :class:`ServicesInventoryRequest` to a JSON-serializable ``dict`` for hashing.
+
+    Ensures a stable hash by sorting the services deterministically by lowercase name.
+    All strings are lowercased and stripped for hashing only, preserving the original
+    payload casing.
+    """
+
+    def _sort_key(s: dict) -> str:
+        return str(s.get("name") or "").strip().lower()
+
+    def _normalize_string(val: str | None) -> str | None:
+        if val is None:
+            return None
+        return str(val).strip().lower()
+
+    def _normalize_list(val: list[str] | None) -> list[str] | None:
+        if not val:
+            return None
+        return sorted([str(v).strip().lower() for v in val if v])
+
+    raw_payloads = [
+        {
+            "name": _normalize_string(s.name),
+            "display_name": _normalize_string(s.display_name),
+            "description": _normalize_string(s.description),
+            "status": _normalize_string(s.status),
+            "startup_type": _normalize_string(s.startup_type),
+            "service_type": _normalize_string(s.service_type),
+            "binary_path": _normalize_string(s.binary_path),
+            "service_account": _normalize_string(s.service_account),
+            "delayed_auto_start": s.delayed_auto_start,
+            "process_id": s.process_id,
+            "dependencies": _normalize_list(s.dependencies),
+            "dependent_services": _normalize_list(s.dependent_services),
+            "accept_stop": s.accept_stop,
+            "accept_pause": s.accept_pause,
+            "can_shutdown": s.can_shutdown,
+            "exit_code": s.exit_code,
+            "service_flags": s.service_flags,
+            "error_control": _normalize_string(s.error_control),
+            "load_order_group": _normalize_string(s.load_order_group),
+            "tag_id": s.tag_id,
+            "trigger_start": s.trigger_start,
+        }
+        for s in inventory.services
+    ]
+
+    sorted_payloads = sorted(raw_payloads, key=_sort_key)
+    return {"services": sorted_payloads}

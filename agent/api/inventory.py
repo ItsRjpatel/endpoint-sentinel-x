@@ -32,7 +32,7 @@ import structlog
 from config.settings import AgentConfig, agent_settings
 
 if TYPE_CHECKING:
-    from models.inventory import WindowsUpdatesInventoryRequest
+    from models.inventory import ServicesInventoryRequest, WindowsUpdatesInventoryRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -213,6 +213,25 @@ def submit_windows_updates(payload: "WindowsUpdatesInventoryRequest") -> None:
         body=payload_dict,
         endpoint_path="/api/v1/inventory/windows-updates",
         category_name="Windows Updates",
+    )
+
+
+def submit_services(payload: "ServicesInventoryRequest") -> None:
+    """
+    Submits a Windows Services inventory payload to the backend.
+
+    :param payload: The full, validated inventory payload object (including hash).
+    """
+    logger.debug(
+        "Submitting windows services inventory payload",
+        inventory_hash=payload.inventory_hash,
+        service_count=len(payload.services),
+    )
+    payload_dict = payload.model_dump()
+    _submit_inventory(
+        body=payload_dict,
+        endpoint_path="/api/v1/inventory/services",
+        category_name="Services",
     )
 
 

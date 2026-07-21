@@ -546,3 +546,43 @@ def sync_windows_updates() -> None:
 
     upload_duration_ms = int((time.monotonic() - t1) * 1000)
     log.info("Windows updates inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
+
+
+def sync_services() -> None:
+    """
+    Orchestrates the entire Windows Services inventory sync cycle.
+
+    Workflow:
+      1. Collect Windows Services (via CIM and Registry)
+      2. Construct `ServicesInventoryRequest` (hashing occurs in collector)
+      3. Upload payload via API
+    """
+    log = logger.bind(component="sync", category="services")
+    log.info("Services inventory sync cycle started")
+
+    t0 = time.monotonic()
+
+    # 1. Collection & Hashing
+    from collectors.services import collect_services
+
+    inventory_request = collect_services()
+
+    collection_duration_ms = int((time.monotonic() - t0) * 1000)
+
+    log.info(
+        "Services inventory collection completed",
+        duration_ms=collection_duration_ms,
+        service_count=len(inventory_request.services),
+        inventory_hash=inventory_request.inventory_hash,
+    )
+
+    # 2. Upload
+    log.info("Services inventory upload started", inventory_hash=inventory_request.inventory_hash)
+    t1 = time.monotonic()
+
+    from api.inventory import submit_services
+
+    submit_services(inventory_request)
+
+    upload_duration_ms = int((time.monotonic() - t1) * 1000)
+    log.info("Services inventory sync cycle finished", upload_duration_ms=upload_duration_ms)

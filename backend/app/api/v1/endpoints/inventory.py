@@ -889,16 +889,36 @@ async def submit_services(
         return InventoryResponse(status="skipped", category=category)
 
     await db.execute(delete(InventoryService).where(InventoryService.endpoint_id == eid))
-    for svc in payload.services:
-        db.add(
-            InventoryService(
-                endpoint_id=eid,
-                name=svc.name,
-                display_name=svc.display_name,
-                startup_type=svc.startup_type,
-                status=svc.status,
+    if payload.services:
+        rows = []
+        for svc in payload.services:
+            rows.append(
+                {
+                    "endpoint_id": eid,
+                    "name": svc.name,
+                    "display_name": svc.display_name,
+                    "description": svc.description,
+                    "status": svc.status,
+                    "startup_type": svc.startup_type,
+                    "service_type": svc.service_type,
+                    "binary_path": svc.binary_path,
+                    "service_account": svc.service_account,
+                    "delayed_auto_start": svc.delayed_auto_start,
+                    "process_id": svc.process_id,
+                    "dependencies": svc.dependencies,
+                    "dependent_services": svc.dependent_services,
+                    "accept_stop": svc.accept_stop,
+                    "accept_pause": svc.accept_pause,
+                    "can_shutdown": svc.can_shutdown,
+                    "exit_code": svc.exit_code,
+                    "service_flags": svc.service_flags,
+                    "error_control": svc.error_control,
+                    "load_order_group": svc.load_order_group,
+                    "tag_id": svc.tag_id,
+                    "trigger_start": svc.trigger_start,
+                }
             )
-        )
+        await db.execute(pg_insert(InventoryService).values(rows))
 
     await _upsert_category_state(
         db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
