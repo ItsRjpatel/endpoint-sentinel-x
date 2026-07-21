@@ -8,7 +8,7 @@ so that the SHA-256 hash remains stable between runs when data is unchanged.
 
 import structlog
 
-from models.inventory import HardwareInventory, OperatingSystemInventory
+from models.inventory import HardwareInventory, OperatingSystemInventory, SecurityInventory
 
 logger = structlog.get_logger(__name__)
 
@@ -77,3 +77,109 @@ def serialize_os(inventory: OperatingSystemInventory) -> dict:
         "time_zone": inventory.time_zone,
         "system_locale": inventory.system_locale,
     }
+
+
+def serialize_security(inventory: "SecurityInventory") -> dict:
+    """
+    Convert a :class:`SecurityInventory` to a JSON-serializable ``dict``.
+
+    Parameters
+    ----------
+    inventory:
+        Validated :class:`SecurityInventory` instance returned by the collector.
+
+    Returns
+    -------
+    dict
+        A plain dictionary ready for JSON encoding and hashing.
+    """
+
+    def _format_date(dt):
+        return dt.isoformat() if dt else None
+
+    payload = {
+        "defender": None,
+        "tpm": None,
+        "secure_boot": None,
+        "uac": None,
+        "security_center": None,
+        "bitlocker_volumes": [],
+        "firewall_profiles": [],
+    }
+
+    if inventory.defender:
+        payload["defender"] = {
+            "installed": inventory.defender.installed,
+            "enabled": inventory.defender.enabled,
+            "real_time_protection": inventory.defender.real_time_protection,
+            "antivirus_signature_version": inventory.defender.antivirus_signature_version,
+            "engine_version": inventory.defender.engine_version,
+            "last_signature_update": _format_date(inventory.defender.last_signature_update),
+            "last_quick_scan": _format_date(inventory.defender.last_quick_scan),
+            "last_full_scan": _format_date(inventory.defender.last_full_scan),
+            "antivirus_enabled": inventory.defender.antivirus_enabled,
+            "antispyware_enabled": inventory.defender.antispyware_enabled,
+            "nis_enabled": inventory.defender.nis_enabled,
+            "ioav_protection": inventory.defender.ioav_protection,
+            "behavior_monitoring": inventory.defender.behavior_monitoring,
+            "tamper_protection": inventory.defender.tamper_protection,
+        }
+
+    if inventory.tpm:
+        payload["tpm"] = {
+            "present": inventory.tpm.present,
+            "ready": inventory.tpm.ready,
+            "enabled": inventory.tpm.enabled,
+            "activated": inventory.tpm.activated,
+            "manufacturer": inventory.tpm.manufacturer,
+            "manufacturer_version": inventory.tpm.manufacturer_version,
+            "specification_version": inventory.tpm.specification_version,
+            "managed_authentication_level": inventory.tpm.managed_authentication_level,
+        }
+
+    if inventory.secure_boot:
+        payload["secure_boot"] = {
+            "supported": inventory.secure_boot.supported,
+            "enabled": inventory.secure_boot.enabled,
+        }
+
+    if inventory.uac:
+        payload["uac"] = {
+            "enabled": inventory.uac.enabled,
+            "consent_prompt_behavior": inventory.uac.consent_prompt_behavior,
+        }
+
+    if inventory.security_center:
+        payload["security_center"] = {
+            "status": inventory.security_center.status,
+            "registered_antivirus": inventory.security_center.registered_antivirus,
+            "registered_firewall": inventory.security_center.registered_firewall,
+            "registered_antispyware": inventory.security_center.registered_antispyware,
+            "product_state": inventory.security_center.product_state,
+        }
+
+    payload["bitlocker_volumes"] = [
+        {
+            "drive_letter": v.drive_letter,
+            "volume_type": v.volume_type,
+            "protection_status": v.protection_status,
+            "encryption_percentage": v.encryption_percentage,
+            "encryption_method": v.encryption_method,
+            "lock_status": v.lock_status,
+            "auto_unlock": v.auto_unlock,
+            "key_protector_count": v.key_protector_count,
+        }
+        for v in inventory.bitlocker_volumes
+    ]
+
+    payload["firewall_profiles"] = [
+        {
+            "profile_name": p.profile_name,
+            "enabled": p.enabled,
+            "default_inbound_policy": p.default_inbound_policy,
+            "default_outbound_policy": p.default_outbound_policy,
+        }
+        for p in inventory.firewall_profiles
+    ]
+
+    return payload

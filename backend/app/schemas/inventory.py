@@ -72,12 +72,78 @@ class OSInventoryRequest(InventoryMeta):
 # ---------------------------------------------------------------------------
 
 
+class DefenderPayload(BaseModel):
+    installed: bool = False
+    enabled: bool = False
+    real_time_protection: bool = False
+    antivirus_signature_version: str | None = None
+    engine_version: str | None = None
+    last_signature_update: datetime | None = None
+    last_quick_scan: datetime | None = None
+    last_full_scan: datetime | None = None
+    antivirus_enabled: bool | None = None
+    antispyware_enabled: bool | None = None
+    nis_enabled: bool | None = None
+    ioav_protection: bool | None = None
+    behavior_monitoring: bool | None = None
+    tamper_protection: bool | None = None
+
+
+class TPMPayload(BaseModel):
+    present: bool = False
+    ready: bool = False
+    enabled: bool = False
+    activated: bool = False
+    manufacturer: str | None = None
+    manufacturer_version: str | None = None
+    specification_version: str | None = None
+    managed_authentication_level: str | None = None
+
+
+class SecureBootPayload(BaseModel):
+    supported: bool = False
+    enabled: bool = False
+
+
+class UACPayload(BaseModel):
+    enabled: bool = False
+    consent_prompt_behavior: str | None = None
+
+
+class SecurityCenterPayload(BaseModel):
+    status: str | None = None
+    registered_antivirus: str | None = None
+    registered_firewall: str | None = None
+    registered_antispyware: str | None = None
+    product_state: int | None = None
+
+
+class BitLockerVolumePayload(BaseModel):
+    drive_letter: str
+    volume_type: str | None = None
+    protection_status: str | None = None
+    encryption_percentage: float | None = None
+    encryption_method: str | None = None
+    lock_status: str | None = None
+    auto_unlock: bool | None = None
+    key_protector_count: int | None = None
+
+
+class FirewallProfilePayload(BaseModel):
+    profile_name: str
+    enabled: bool = False
+    default_inbound_policy: str | None = None
+    default_outbound_policy: str | None = None
+
+
 class SecurityPayload(BaseModel):
-    antivirus_name: str | None = None
-    antivirus_status: str | None = None
-    firewall_enabled: bool | None = None
-    bitlocker_enabled: bool | None = None
-    secure_boot_enabled: bool | None = None
+    defender: DefenderPayload | None = None
+    tpm: TPMPayload | None = None
+    secure_boot: SecureBootPayload | None = None
+    uac: UACPayload | None = None
+    security_center: SecurityCenterPayload | None = None
+    bitlocker_volumes: list[BitLockerVolumePayload] = Field(default_factory=list)
+    firewall_profiles: list[FirewallProfilePayload] = Field(default_factory=list)
 
 
 class SecurityInventoryRequest(InventoryMeta):

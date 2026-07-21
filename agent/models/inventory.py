@@ -87,3 +87,81 @@ class OSInventoryRequest(InventoryMeta):
     """Full request body sent to ``POST /api/v1/inventory/operating-system``."""
 
     os: OperatingSystemInventory
+
+
+class DefenderInventory(BaseModel):
+    installed: bool = False
+    enabled: bool = False
+    real_time_protection: bool = False
+    antivirus_signature_version: str | None = None
+    engine_version: str | None = None
+    last_signature_update: datetime | None = None
+    last_quick_scan: datetime | None = None
+    last_full_scan: datetime | None = None
+    antivirus_enabled: bool | None = None
+    antispyware_enabled: bool | None = None
+    nis_enabled: bool | None = None
+    ioav_protection: bool | None = None
+    behavior_monitoring: bool | None = None
+    tamper_protection: bool | None = None
+
+
+class TPMInventory(BaseModel):
+    present: bool = False
+    ready: bool = False
+    enabled: bool = False
+    activated: bool = False
+    manufacturer: str | None = None
+    manufacturer_version: str | None = None
+    specification_version: str | None = None
+    managed_authentication_level: str | None = None
+
+
+class SecureBootInventory(BaseModel):
+    supported: bool = False
+    enabled: bool = False
+
+
+class UACInventory(BaseModel):
+    enabled: bool = False
+    consent_prompt_behavior: str | None = None
+
+
+class SecurityCenterInventory(BaseModel):
+    status: str | None = None
+    registered_antivirus: str | None = None
+    registered_firewall: str | None = None
+    registered_antispyware: str | None = None
+    product_state: int | None = None
+
+
+class BitLockerVolumeInventory(BaseModel):
+    drive_letter: str
+    volume_type: str | None = None
+    protection_status: str | None = None
+    encryption_percentage: float | None = None
+    encryption_method: str | None = None
+    lock_status: str | None = None
+    auto_unlock: bool | None = None
+    key_protector_count: int | None = None
+
+
+class FirewallProfileInventory(BaseModel):
+    profile_name: str
+    enabled: bool = False
+    default_inbound_policy: str | None = None
+    default_outbound_policy: str | None = None
+
+
+class SecurityInventory(BaseModel):
+    defender: DefenderInventory | None = None
+    tpm: TPMInventory | None = None
+    secure_boot: SecureBootInventory | None = None
+    uac: UACInventory | None = None
+    security_center: SecurityCenterInventory | None = None
+    bitlocker_volumes: list[BitLockerVolumeInventory] = Field(default_factory=list)
+    firewall_profiles: list[FirewallProfileInventory] = Field(default_factory=list)
+
+
+class SecurityInventoryRequest(InventoryMeta):
+    security: SecurityInventory

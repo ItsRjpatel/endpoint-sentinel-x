@@ -324,17 +324,94 @@ async def submit_security(
     await db.execute(
         delete(InventorySecurityStatus).where(InventorySecurityStatus.endpoint_id == eid)
     )
+    from app.db.models.inventory_bitlocker_volume import InventoryBitlockerVolume
+    from app.db.models.inventory_firewall_profile import InventoryFirewallProfile
+
+    await db.execute(
+        delete(InventoryBitlockerVolume).where(InventoryBitlockerVolume.endpoint_id == eid)
+    )
+    await db.execute(
+        delete(InventoryFirewallProfile).where(InventoryFirewallProfile.endpoint_id == eid)
+    )
+
     sec = payload.security
+
+    # Extract nested payloads (they can be None depending on collection success)
+    def_data = sec.defender
+    tpm_data = sec.tpm
+    sb_data = sec.secure_boot
+    uac_data = sec.uac
+    sc_data = sec.security_center
+
     db.add(
         InventorySecurityStatus(
             endpoint_id=eid,
-            antivirus_name=sec.antivirus_name,
-            antivirus_status=sec.antivirus_status,
-            firewall_enabled=sec.firewall_enabled,
-            bitlocker_enabled=sec.bitlocker_enabled,
-            secure_boot_enabled=sec.secure_boot_enabled,
+            # Defender
+            defender_installed=def_data.installed if def_data else False,
+            defender_enabled=def_data.enabled if def_data else False,
+            defender_rtp=def_data.real_time_protection if def_data else False,
+            defender_sig_version=def_data.antivirus_signature_version if def_data else None,
+            defender_engine_version=def_data.engine_version if def_data else None,
+            defender_last_sig_update=def_data.last_signature_update if def_data else None,
+            defender_last_quick_scan=def_data.last_quick_scan if def_data else None,
+            defender_last_full_scan=def_data.last_full_scan if def_data else None,
+            defender_av_enabled=def_data.antivirus_enabled if def_data else None,
+            defender_antispyware_enabled=def_data.antispyware_enabled if def_data else None,
+            defender_nis_enabled=def_data.nis_enabled if def_data else None,
+            defender_ioav_protection=def_data.ioav_protection if def_data else None,
+            defender_behavior_monitoring=def_data.behavior_monitoring if def_data else None,
+            defender_tamper_protection=def_data.tamper_protection if def_data else None,
+            # TPM
+            tpm_present=tpm_data.present if tpm_data else False,
+            tpm_ready=tpm_data.ready if tpm_data else False,
+            tpm_enabled=tpm_data.enabled if tpm_data else False,
+            tpm_activated=tpm_data.activated if tpm_data else False,
+            tpm_manufacturer=tpm_data.manufacturer if tpm_data else None,
+            tpm_manufacturer_version=tpm_data.manufacturer_version if tpm_data else None,
+            tpm_specification_version=tpm_data.specification_version if tpm_data else None,
+            tpm_managed_auth_level=tpm_data.managed_authentication_level if tpm_data else None,
+            # Secure Boot
+            secure_boot_supported=sb_data.supported if sb_data else False,
+            secure_boot_enabled=sb_data.enabled if sb_data else False,
+            # UAC
+            uac_enabled=uac_data.enabled if uac_data else False,
+            uac_consent_prompt_behavior=uac_data.consent_prompt_behavior if uac_data else None,
+            # Security Center
+            security_center_status=sc_data.status if sc_data else None,
+            security_center_registered_av=sc_data.registered_antivirus if sc_data else None,
+            security_center_registered_fw=sc_data.registered_firewall if sc_data else None,
+            security_center_registered_antispyware=sc_data.registered_antispyware
+            if sc_data
+            else None,
+            security_center_product_state=sc_data.product_state if sc_data else None,
         )
     )
+
+    for bv in sec.bitlocker_volumes:
+        db.add(
+            InventoryBitlockerVolume(
+                endpoint_id=eid,
+                drive_letter=bv.drive_letter,
+                volume_type=bv.volume_type,
+                protection_status=bv.protection_status,
+                encryption_percentage=bv.encryption_percentage,
+                encryption_method=bv.encryption_method,
+                lock_status=bv.lock_status,
+                auto_unlock=bv.auto_unlock,
+                key_protector_count=bv.key_protector_count,
+            )
+        )
+
+    for fp in sec.firewall_profiles:
+        db.add(
+            InventoryFirewallProfile(
+                endpoint_id=eid,
+                profile_name=fp.profile_name,
+                enabled=fp.enabled,
+                default_inbound_policy=fp.default_inbound_policy,
+                default_outbound_policy=fp.default_outbound_policy,
+            )
+        )
     await _upsert_category_state(
         db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
     )

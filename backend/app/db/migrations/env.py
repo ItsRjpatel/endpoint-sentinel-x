@@ -9,8 +9,10 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.models.endpoint import Endpoint  # noqa: F401
 from app.db.models.enrollment_token import EnrollmentToken  # noqa: F401
+from app.db.models.inventory_bitlocker_volume import InventoryBitlockerVolume  # noqa: F401
 from app.db.models.inventory_category_state import InventoryCategoryState  # noqa: F401
 from app.db.models.inventory_disk import InventoryDisk  # noqa: F401
+from app.db.models.inventory_firewall_profile import InventoryFirewallProfile  # noqa: F401
 from app.db.models.inventory_hardware import InventoryHardware  # noqa: F401
 from app.db.models.inventory_local_user import InventoryLocalUser  # noqa: F401
 from app.db.models.inventory_network_adapter import InventoryNetworkAdapter  # noqa: F401

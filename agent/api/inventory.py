@@ -212,6 +212,27 @@ def submit_os(body: dict, config: AgentConfig | None = None) -> None:
     )
 
 
+def submit_security(body: dict, config: AgentConfig | None = None) -> None:
+    """
+    Upload a security inventory payload to ``POST /api/v1/inventory/security``.
+
+    Parameters
+    ----------
+    body:
+        Fully-formed request body as a plain dictionary.  Must conform to the
+        ``SecurityInventoryRequest`` schema expected by the backend.
+    config:
+        Agent configuration instance.  Defaults to the module-level
+        ``agent_settings`` singleton when ``None``.
+    """
+    _submit_inventory(
+        body=body,
+        endpoint_path="/api/v1/inventory/security",
+        category_name="Security",
+        config=config,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
