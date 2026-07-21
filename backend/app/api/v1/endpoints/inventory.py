@@ -796,6 +796,8 @@ async def submit_software(
         await db.flush()
         return InventoryResponse(status="skipped", category=category)
 
+    # Note: Using SQLAlchemy async session context manager or outer FastAPI DI for commit/rollback.
+    # We perform bulk delete & insert within the same transaction.
     await db.execute(delete(InventorySoftware).where(InventorySoftware.endpoint_id == eid))
     for s in payload.software:
         db.add(
@@ -805,6 +807,28 @@ async def submit_software(
                 version=s.version,
                 publisher=s.publisher,
                 install_date=s.install_date,
+                install_location=s.install_location,
+                install_source=s.install_source,
+                estimated_size_bytes=s.estimated_size_bytes,
+                uninstall_string=s.uninstall_string,
+                quiet_uninstall_string=s.quiet_uninstall_string,
+                install_scope=s.install_scope,
+                architecture=s.architecture,
+                product_code=s.product_code,
+                help_link=s.help_link,
+                url_info_about=s.url_info_about,
+                url_update_info=s.url_update_info,
+                display_icon=s.display_icon,
+                language=s.language,
+                release_type=s.release_type,
+                parent_application=s.parent_application,
+                parent_version=s.parent_version,
+                system_component=s.system_component,
+                windows_installer=s.windows_installer,
+                no_remove=s.no_remove,
+                no_modify=s.no_modify,
+                no_repair=s.no_repair,
+                classification=s.classification,
             )
         )
 

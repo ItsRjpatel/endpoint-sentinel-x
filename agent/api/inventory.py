@@ -271,6 +271,25 @@ def submit_storage(body: dict, config: AgentConfig | None = None) -> None:
     )
 
 
+def submit_software(body: dict, config: AgentConfig | None = None) -> None:
+    """
+    Upload a software inventory payload to ``POST /api/v1/inventory/software``.
+
+    Parameters
+    ----------
+    body:
+        Fully-formed request body as a plain dictionary.
+    config:
+        Agent configuration instance.
+    """
+    _submit_inventory(
+        body=body,
+        endpoint_path="/api/v1/inventory/software",
+        category_name="Software",
+        config=config,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

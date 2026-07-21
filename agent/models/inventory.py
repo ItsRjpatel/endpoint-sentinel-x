@@ -329,3 +329,41 @@ class StorageInventoryRequest(InventoryMeta):
     disks: list[DiskPayload] = Field(default_factory=list)
     volumes: list[VolumePayload] = Field(default_factory=list)
     storage_pools: list[StoragePoolPayload] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Software
+# ---------------------------------------------------------------------------
+
+
+class SoftwarePayload(BaseModel):
+    name: str
+    version: str | None = None
+    publisher: str | None = None
+    install_date: str | None = None
+    install_location: str | None = None
+    install_source: str | None = None
+    estimated_size_bytes: int | None = None
+    uninstall_string: str | None = None
+    quiet_uninstall_string: str | None = None
+    install_scope: str | None = None
+    architecture: str | None = None
+    product_code: str | None = None
+    help_link: str | None = None
+    url_info_about: str | None = None
+    url_update_info: str | None = None
+    display_icon: str | None = None
+    language: str | None = None
+    release_type: str | None = None
+    parent_application: str | None = None
+    parent_version: str | None = None
+    system_component: bool = False
+    windows_installer: bool = False
+    no_remove: bool = False
+    no_modify: bool = False
+    no_repair: bool = False
+    classification: str | None = None
+
+
+class SoftwareInventoryRequest(InventoryMeta):
+    software: list[SoftwarePayload] = Field(default_factory=list)

@@ -430,3 +430,77 @@ def _run_sync_storage(cfg: AgentConfig) -> None:
 
     upload_duration_ms = int((time.monotonic() - t1) * 1000)
     log.info("Storage inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
+
+
+def sync_software(config: AgentConfig | None = None) -> None:
+    """
+    Run the complete software inventory synchronization cycle.
+
+    Parameters
+    ----------
+    config:
+        Agent configuration instance.  Defaults to the module-level
+        ``agent_settings`` singleton when ``None``.
+    """
+    cfg = config or agent_settings
+
+    try:
+        _run_sync_software(cfg)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Unexpected error in Software inventory sync — agent continues",
+            error=str(exc),
+        )
+
+
+def _run_sync_software(cfg: AgentConfig) -> None:
+    """Internal sync implementation — called by :func:`sync_software`."""
+    from api.inventory import submit_software
+    from collectors.software import collect_software
+
+    log = logger.bind(category="software", agent_version=cfg.agent_version)
+
+    # ── 1. Collection ────────────────────────────────────────────────────────
+    log.info("Software inventory collection started")
+    t0 = time.monotonic()
+
+    inventory = collect_software()
+
+    collection_duration_ms = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "Software inventory collection completed",
+        duration_ms=collection_duration_ms,
+        software_count=len(inventory.software),
+    )
+
+    # ── 2. Serialization ─────────────────────────────────────────────────────
+    from utils.serialization import serialize_software
+
+    software_dict = serialize_software(inventory)
+    payload_bytes = len(json.dumps(software_dict).encode("utf-8"))
+    log.info("Software inventory payload serialized", payload_bytes=payload_bytes)
+
+    # ── 3. Hashing ───────────────────────────────────────────────────────────
+    from utils.hashing import compute_inventory_hash
+
+    inventory_hash = compute_inventory_hash(software_dict)
+    log.info("Software inventory hash computed", inventory_hash=inventory_hash)
+
+    # ── 4. Build request body ────────────────────────────────────────────────
+    collected_at = datetime.now(UTC).isoformat()
+
+    request_body: dict = {
+        "collected_at": collected_at,
+        "agent_version": cfg.agent_version,
+        "inventory_hash": inventory_hash,
+        "software": software_dict["software"],
+    }
+
+    # ── 5. Upload ────────────────────────────────────────────────────────────
+    log.info("Software inventory upload started", inventory_hash=inventory_hash)
+    t1 = time.monotonic()
+
+    submit_software(body=request_body, config=cfg)
+
+    upload_duration_ms = int((time.monotonic() - t1) * 1000)
+    log.info("Software inventory sync cycle finished", upload_duration_ms=upload_duration_ms)

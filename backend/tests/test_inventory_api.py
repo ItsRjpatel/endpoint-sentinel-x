@@ -335,49 +335,6 @@ async def test_network_normalized_addresses(
 # Software inventory
 # ---------------------------------------------------------------------------
 
-
-@pytest.mark.anyio
-async def test_software_inventory_accepted(
-    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
-) -> None:
-    endpoint, secret = enrolled_agent
-    sw_list = [
-        {
-            "name": "Google Chrome",
-            "version": "120.0",
-            "publisher": "Google",
-            "install_date": "2024-01-15",
-        },
-        {
-            "name": "Visual Studio Code",
-            "version": "1.85.0",
-            "publisher": "Microsoft",
-            "install_date": None,
-        },
-    ]
-    r = await client.post(
-        "/api/v1/inventory/software",
-        headers=_agent_headers(endpoint, secret),
-        json={
-            "collected_at": datetime.now(UTC).isoformat(),
-            "agent_version": "1.0.0",
-            "inventory_hash": _make_hash({"software": sw_list}),
-            "software": sw_list,
-        },
-    )
-    assert r.status_code == 200
-    assert r.json()["status"] == "accepted"
-
-    rows = await db_session.execute(
-        select(InventorySoftware).where(InventorySoftware.endpoint_id == endpoint.id)
-    )
-    all_sw = rows.scalars().all()
-    assert len(all_sw) == 2
-    names = {s.name for s in all_sw}
-    assert "Google Chrome" in names
-
-
-# ---------------------------------------------------------------------------
 # OS inventory
 # ---------------------------------------------------------------------------
 
@@ -477,3 +434,54 @@ async def test_storage_inventory_accepted(
     vol_list = vols.scalars().all()
     assert len(vol_list) == 1
     assert vol_list[0].drive_letter == "C"
+
+
+# ---------------------------------------------------------------------------
+# Software inventory
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_software_inventory_accepted(
+    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
+) -> None:
+
+    endpoint, secret = enrolled_agent
+    sw_list = [
+        {
+            "name": "Google Chrome",
+            "version": "120.0",
+            "publisher": "Google LLC",
+            "install_date": "2024-01-15",
+            "install_scope": "Machine",
+            "architecture": "x64",
+        },
+        {
+            "name": "Visual Studio Code",
+            "version": "1.85.0",
+            "publisher": "Microsoft Corporation",
+            "install_date": None,
+            "install_scope": "User",
+            "architecture": "x64",
+        },
+    ]
+    r = await client.post(
+        "/api/v1/inventory/software",
+        headers=_agent_headers(endpoint, secret),
+        json={
+            "collected_at": datetime.now(UTC).isoformat(),
+            "agent_version": "1.0.0",
+            "inventory_hash": _make_hash({"software": sw_list}),
+            "software": sw_list,
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "accepted"
+
+    softwares = await db_session.execute(
+        select(InventorySoftware).where(InventorySoftware.endpoint_id == endpoint.id)
+    )
+    software_list = softwares.scalars().all()
+    assert len(software_list) == 2
+    assert any(s.name == "Google Chrome" and s.install_scope == "Machine" for s in software_list)
+    assert any(s.name == "Visual Studio Code" and s.install_scope == "User" for s in software_list)

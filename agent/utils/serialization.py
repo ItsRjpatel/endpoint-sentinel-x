@@ -12,6 +12,7 @@ from models.inventory import (
     HardwareInventory,
     OperatingSystemInventory,
     SecurityInventory,
+    SoftwareInventoryRequest,
     StorageInventoryRequest,
 )
 
@@ -413,5 +414,58 @@ def serialize_storage(inventory: "StorageInventoryRequest") -> dict:
             )
 
         payload["storage_pools"].append(pool_dict)
+
+    return payload
+
+
+def serialize_software(inventory: "SoftwareInventoryRequest") -> dict:
+    """
+    Convert a :class:`SoftwareInventoryRequest` to a JSON-serializable ``dict``.
+
+    The software items are sorted by Publisher, Display Name, Version, Architecture, Install Scope
+    with strings converted to lowercase for deterministic serialization.
+    """
+    payload = {"software": []}
+
+    def _sort_key(s):
+        pub = str(s.publisher or "").strip().lower()
+        name = str(s.name or "").strip().lower()
+        ver = str(s.version or "").strip().lower()
+        arch = str(s.architecture or "").strip().lower()
+        scope = str(s.install_scope or "").strip().lower()
+        return (pub, name, ver, arch, scope)
+
+    sorted_software = sorted(inventory.software, key=_sort_key)
+    for s in sorted_software:
+        payload["software"].append(
+            {
+                "name": s.name,
+                "version": s.version,
+                "publisher": s.publisher,
+                "install_date": s.install_date,
+                "install_location": s.install_location,
+                "install_source": s.install_source,
+                "estimated_size_bytes": s.estimated_size_bytes,
+                "uninstall_string": s.uninstall_string,
+                "quiet_uninstall_string": s.quiet_uninstall_string,
+                "install_scope": s.install_scope,
+                "architecture": s.architecture,
+                "product_code": s.product_code,
+                "help_link": s.help_link,
+                "url_info_about": s.url_info_about,
+                "url_update_info": s.url_update_info,
+                "display_icon": s.display_icon,
+                "language": s.language,
+                "release_type": s.release_type,
+                "parent_application": s.parent_application,
+                "parent_version": s.parent_version,
+                "system_component": s.system_component,
+                "windows_installer": s.windows_installer,
+                "no_remove": s.no_remove,
+                "no_modify": s.no_modify,
+                "no_repair": s.no_repair,
+                "classification": s.classification,
+            }
+        )
 
     return payload
