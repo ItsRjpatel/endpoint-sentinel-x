@@ -24,11 +24,15 @@ backoff (1 s → 2 s → 4 s).  HTTP error responses (401, 403, 409, 413) are
 """
 
 import time
+from typing import TYPE_CHECKING
 
 import httpx
 import structlog
 
 from config.settings import AgentConfig, agent_settings
+
+if TYPE_CHECKING:
+    from models.inventory import WindowsUpdatesInventoryRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -188,6 +192,27 @@ def submit_hardware(body: dict, config: AgentConfig | None = None) -> None:
         endpoint_path="/api/v1/inventory/hardware",
         category_name="Hardware",
         config=config,
+    )
+
+
+def submit_windows_updates(payload: "WindowsUpdatesInventoryRequest") -> None:
+    """
+    Submits a Windows Updates inventory payload to the backend.
+
+    :param payload: The full, validated inventory payload object (including hash).
+    """
+    logger.debug(
+        "Submitting windows updates inventory payload",
+        inventory_hash=payload.inventory_hash,
+        update_count=len(payload.updates),
+    )
+    # The BaseModel `.model_dump()` handles converting nested models, enums,
+    # and date/time objects into JSON-safe dictionaries exactly as FastAPI expects.
+    payload_dict = payload.model_dump()
+    _submit_inventory(
+        body=payload_dict,
+        endpoint_path="/api/v1/inventory/windows-updates",
+        category_name="Windows Updates",
     )
 
 

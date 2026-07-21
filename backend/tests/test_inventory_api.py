@@ -22,6 +22,7 @@ from app.db.models.inventory_network_address import InventoryNetworkAddress
 from app.db.models.inventory_os import InventoryOS
 from app.db.models.inventory_software import InventorySoftware
 from app.db.models.inventory_sync_log import InventorySyncLog
+from app.db.models.inventory_windows_update import InventoryWindowsUpdate
 from app.db.models.organization import Organization
 from app.db.session import AsyncSessionLocal
 from app.dependencies.database import get_db
@@ -329,6 +330,63 @@ async def test_network_normalized_addresses(
     families = {a.family for a in addr_list}
     assert "ipv4" in families
     assert "ipv6" in families
+
+
+@pytest.mark.asyncio
+async def test_submit_windows_updates(
+    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
+):
+    endpoint, secret = enrolled_agent
+    now = datetime.now(UTC).isoformat()
+    payload = {
+        "collected_at": now,
+        "agent_version": "1.0.0",
+        "inventory_hash": "testhash-windows-updates-123",
+        "updates": [
+            {
+                "hotfix_id": "KB5027303",
+                "title": "2023-06 Cumulative Update",
+                "installation_state": "Installed",
+                "is_security_update": True,
+                "is_cumulative_update": True,
+            }
+        ],
+    }
+
+    headers = _agent_headers(endpoint, secret)
+
+    # 1. First submission (accepted)
+    response = await client.post("/api/v1/inventory/windows-updates", json=payload, headers=headers)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "accepted"
+
+    # Verify DB
+    result = await db_session.execute(
+        select(InventoryWindowsUpdate).where(InventoryWindowsUpdate.endpoint_id == endpoint.id)
+    )
+    updates = result.scalars().all()
+    assert len(updates) == 1
+    assert updates[0].hotfix_id == "KB5027303"
+    assert updates[0].is_security_update is True
+    assert updates[0].installation_state == "Installed"
+
+    # 2. Second submission with same hash (skipped)
+    response2 = await client.post(
+        "/api/v1/inventory/windows-updates", json=payload, headers=headers
+    )
+    assert response2.status_code == 200
+    assert response2.json()["status"] == "skipped"
+
+    # Verify sync log has skipped entry
+    log_result = await db_session.execute(
+        select(InventorySyncLog)
+        .where(InventorySyncLog.endpoint_id == endpoint.id)
+        .where(InventorySyncLog.category == "windows_updates")
+        .order_by(InventorySyncLog.started_at.desc())
+    )
+    logs = log_result.scalars().all()
+    assert logs[0].status == "skipped"
 
 
 # ---------------------------------------------------------------------------

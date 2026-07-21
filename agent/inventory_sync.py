@@ -504,3 +504,45 @@ def _run_sync_software(cfg: AgentConfig) -> None:
 
     upload_duration_ms = int((time.monotonic() - t1) * 1000)
     log.info("Software inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
+
+
+def sync_windows_updates() -> None:
+    """
+    Orchestrates the entire Windows Updates inventory sync cycle.
+
+    Workflow:
+      1. Collect Windows Updates (via COM API + WMI)
+      2. Construct `WindowsUpdatesInventoryRequest` (hashing occurs in collector)
+      3. Upload payload via API
+    """
+    log = logger.bind(component="sync", category="windows_updates")
+    log.info("Windows updates inventory sync cycle started")
+
+    t0 = time.monotonic()
+
+    # 1. Collection & Hashing
+    from collectors.windows_updates import collect_windows_updates
+
+    inventory_request = collect_windows_updates()
+
+    collection_duration_ms = int((time.monotonic() - t0) * 1000)
+
+    log.info(
+        "Windows updates inventory collection completed",
+        duration_ms=collection_duration_ms,
+        update_count=len(inventory_request.updates),
+        inventory_hash=inventory_request.inventory_hash,
+    )
+
+    # 2. Upload
+    log.info(
+        "Windows updates inventory upload started", inventory_hash=inventory_request.inventory_hash
+    )
+    t1 = time.monotonic()
+
+    from api.inventory import submit_windows_updates
+
+    submit_windows_updates(inventory_request)
+
+    upload_duration_ms = int((time.monotonic() - t1) * 1000)
+    log.info("Windows updates inventory sync cycle finished", upload_duration_ms=upload_duration_ms)

@@ -469,3 +469,51 @@ def serialize_software(inventory: "SoftwareInventoryRequest") -> dict:
         )
 
     return payload
+
+
+def serialize_windows_updates(inventory: "WindowsUpdatesInventoryRequest") -> dict:
+    """
+    Convert a :class:`WindowsUpdatesInventoryRequest` to a JSON-serializable ``dict``.
+
+    Ensures a stable hash by sorting the updates deterministically.
+    Sort precedence (all normalized to lowercase):
+    1. update_id (GUID)
+    2. package_identity
+    3. hotfix_id (KB Number)
+    4. installed_on
+    """
+
+    def _sort_key(u: dict) -> tuple:
+        uid = str(u.get("update_id") or "").strip().lower()
+        pkg = str(u.get("package_identity") or "").strip().lower()
+        kb = str(u.get("hotfix_id") or "").strip().lower()
+        dt = str(u.get("installed_on") or "").strip().lower()
+        return (uid, pkg, kb, dt)
+
+    raw_payloads = [
+        {
+            "hotfix_id": u.hotfix_id,
+            "title": u.title,
+            "description": u.description,
+            "classification": u.classification,
+            "installed_by": u.installed_by,
+            "installed_on": u.installed_on.isoformat() if u.installed_on else None,
+            "installation_state": u.installation_state,
+            "support_url": u.support_url,
+            "update_id": u.update_id,
+            "revision_number": u.revision_number,
+            "deployment_source": u.deployment_source,
+            "package_identity": u.package_identity,
+            "is_security_update": u.is_security_update,
+            "is_critical_update": u.is_critical_update,
+            "is_cumulative_update": u.is_cumulative_update,
+            "is_driver_update": u.is_driver_update,
+            "is_feature_update": u.is_feature_update,
+            "is_preview_update": u.is_preview_update,
+            "is_servicing_stack_update": u.is_servicing_stack_update,
+        }
+        for u in inventory.updates
+    ]
+
+    sorted_payloads = sorted(raw_payloads, key=_sort_key)
+    return {"updates": sorted_payloads}

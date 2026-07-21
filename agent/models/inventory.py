@@ -366,4 +366,30 @@ class SoftwarePayload(BaseModel):
 
 
 class SoftwareInventoryRequest(InventoryMeta):
-    software: list[SoftwarePayload] = Field(default_factory=list)
+    software: list[SoftwarePayload]
+
+
+class WindowsUpdatePayload(BaseModel):
+    hotfix_id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    classification: str | None = None
+    installed_by: str | None = None
+    installed_on: datetime | None = None
+    installation_state: str | None = None
+    support_url: str | None = None
+    update_id: str | None = None
+    revision_number: int | None = None
+    deployment_source: str | None = None
+    package_identity: str | None = None
+    is_security_update: bool = False
+    is_critical_update: bool = False
+    is_cumulative_update: bool = False
+    is_driver_update: bool = False
+    is_feature_update: bool = False
+    is_preview_update: bool = False
+    is_servicing_stack_update: bool = False
+
+
+class WindowsUpdatesInventoryRequest(InventoryMeta):
+    updates: list[WindowsUpdatePayload] = Field(default_factory=list)

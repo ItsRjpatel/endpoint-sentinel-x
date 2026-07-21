@@ -850,78 +850,6 @@ async def submit_software(
 
 
 # ---------------------------------------------------------------------------
-# POST /inventory/windows-updates
-# ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/inventory/windows-updates",
-    response_model=InventoryResponse,
-    summary="Submit Windows Update inventory",
-)
-async def submit_windows_updates(
-    request: Request,
-    payload: WindowsUpdatesInventoryRequest,
-    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> InventoryResponse:
-    if (
-        request.headers.get("content-length")
-        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
-    ):
-        raise HTTPException(status_code=413, detail="Payload Too Large")
-
-    started_at = datetime.now(UTC)
-    category = "windows-updates"
-    eid = current_agent.id
-
-    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
-    if existing:
-        await _write_sync_log(
-            db,
-            eid,
-            category,
-            "skipped",
-            payload.inventory_hash,
-            payload.agent_version,
-            payload.collected_at,
-            started_at,
-        )
-        await db.flush()
-        return InventoryResponse(status="skipped", category=category)
-
-    await db.execute(
-        delete(InventoryWindowsUpdate).where(InventoryWindowsUpdate.endpoint_id == eid)
-    )
-    for u in payload.updates:
-        db.add(
-            InventoryWindowsUpdate(
-                endpoint_id=eid,
-                kb_id=u.kb_id,
-                title=u.title,
-                install_date=u.install_date,
-                status=u.status,
-            )
-        )
-
-    await _upsert_category_state(
-        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
-    )
-    await _write_sync_log(
-        db,
-        eid,
-        category,
-        "success",
-        payload.inventory_hash,
-        payload.agent_version,
-        payload.collected_at,
-        started_at,
-    )
-    await db.flush()
-    return InventoryResponse(status="accepted", category=category)
-
-
-# ---------------------------------------------------------------------------
 # POST /inventory/services
 # ---------------------------------------------------------------------------
 
@@ -1041,6 +969,99 @@ async def submit_local_users(
                 last_login=u.last_login,
             )
         )
+
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/windows-updates
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/windows-updates",
+    response_model=InventoryResponse,
+    summary="Submit Windows Updates inventory",
+)
+async def submit_windows_updates(
+    request: Request,
+    payload: WindowsUpdatesInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "windows_updates"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    # Wipe existing
+    await db.execute(
+        delete(InventoryWindowsUpdate).where(InventoryWindowsUpdate.endpoint_id == eid)
+    )
+
+    # Bulk insert
+    if payload.updates:
+        rows = []
+        for u in payload.updates:
+            rows.append(
+                {
+                    "endpoint_id": eid,
+                    "hotfix_id": u.hotfix_id,
+                    "title": u.title,
+                    "description": u.description,
+                    "classification": u.classification,
+                    "installed_by": u.installed_by,
+                    "installed_on": u.installed_on,
+                    "installation_state": u.installation_state,
+                    "support_url": u.support_url,
+                    "update_id": u.update_id,
+                    "revision_number": u.revision_number,
+                    "deployment_source": u.deployment_source,
+                    "package_identity": u.package_identity,
+                    "is_security_update": u.is_security_update,
+                    "is_critical_update": u.is_critical_update,
+                    "is_cumulative_update": u.is_cumulative_update,
+                    "is_driver_update": u.is_driver_update,
+                    "is_feature_update": u.is_feature_update,
+                    "is_preview_update": u.is_preview_update,
+                    "is_servicing_stack_update": u.is_servicing_stack_update,
+                }
+            )
+        await db.execute(pg_insert(InventoryWindowsUpdate).values(rows))
 
     await _upsert_category_state(
         db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
