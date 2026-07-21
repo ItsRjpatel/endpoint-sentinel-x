@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """
 Unit tests for the Security inventory collector.
 """
@@ -26,7 +27,7 @@ def test_collect_security_success():
                 '"\\\\/Date(1721532000000)\\\\/", "IsTamperProtected": true}'
             )
         elif "Get-Tpm" in cmd:
-            return '{"TpmPresent": true, "TpmReady": true, "TpmEnabled": true, "ManufacturerId": "INTC"}'
+            return '{"TpmPresent": true, "TpmReady": true, "TpmEnabled": true, "ManufacturerId": "INTC"}'  # noqa: E501
         elif "Confirm-SecureBootUEFI" in cmd:
             return '{"supported": true, "enabled": true}'
         elif "Policies\\System" in cmd:
@@ -79,7 +80,7 @@ def test_collect_security_success():
 
 
 def test_collect_security_partial_failure():
-    """Verify that exceptions in individual collection functions don't crash the entire collection."""
+    """Verify that exceptions in individual collection functions don't crash the entire collection."""  # noqa: E501
 
     def mock_run_powershell(cmd: str) -> str | None:
         if "IsInRole" in cmd:

@@ -23,7 +23,7 @@ logger = structlog.get_logger(__name__)
 def _is_admin() -> bool:
     """Check if the current process has Administrator privileges."""
     script = (
-        "$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent());"
+        "$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent());"  # noqa: E501
         "$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"
     )
     result = run_powershell(script)

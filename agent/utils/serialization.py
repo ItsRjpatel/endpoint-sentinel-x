@@ -183,3 +183,98 @@ def serialize_security(inventory: "SecurityInventory") -> dict:
     ]
 
     return payload
+
+
+def serialize_network(identity_payload, adapters_payload) -> dict:
+    """
+    Convert network inventory to a JSON-serializable ``dict``.
+
+    Parameters
+    ----------
+    identity_payload: NetworkIdentityPayload
+    adapters_payload: list[AdapterPayload]
+
+    Returns
+    -------
+    dict
+    """
+
+    def _format_date(dt):
+        return dt.isoformat() if dt else None
+
+    payload = {
+        "identity": {
+            "fqdn": identity_payload.fqdn,
+            "domain_workgroup": identity_payload.domain_workgroup,
+            "primary_dns_suffix": identity_payload.primary_dns_suffix,
+        },
+        "adapters": [],
+    }
+
+    # Sort adapters by name for deterministic hashing
+    sorted_adapters = sorted(adapters_payload, key=lambda a: a.name)
+
+    for adapter in sorted_adapters:
+        adapter_dict = {
+            "name": adapter.name,
+            "friendly_name": adapter.friendly_name,
+            "description": adapter.description,
+            "interface_type": adapter.interface_type,
+            "adapter_type": adapter.adapter_type,
+            "manufacturer": adapter.manufacturer,
+            "mac_address": adapter.mac_address,
+            "is_physical": adapter.is_physical,
+            "is_virtual": adapter.is_virtual,
+            "status": adapter.status,
+            "admin_status": adapter.admin_status,
+            "link_speed_bps": adapter.link_speed_bps,
+            "mtu": adapter.mtu,
+            "driver_version": adapter.driver_version,
+            "driver_date": _format_date(adapter.driver_date),
+            "interface_index": adapter.interface_index,
+            "interface_guid": adapter.interface_guid,
+            "dhcp_enabled": adapter.dhcp_enabled,
+            "dhcp_server": adapter.dhcp_server,
+            "dhcp_lease_obtained": _format_date(adapter.dhcp_lease_obtained),
+            "dhcp_lease_expires": _format_date(adapter.dhcp_lease_expires),
+            # Sort simple lists
+            "default_gateways": sorted(adapter.default_gateways),
+            "dns_servers": sorted(adapter.dns_servers),
+            "dns_search_suffixes": sorted(adapter.dns_search_suffixes),
+            "addresses": [],
+            "wifi": None,
+            "vpn": None,
+        }
+
+        sorted_addresses = sorted(adapter.addresses, key=lambda addr: addr.address)
+        for addr in sorted_addresses:
+            adapter_dict["addresses"].append(
+                {
+                    "address": addr.address,
+                    "family": addr.family,
+                    "prefix_length": addr.prefix_length,
+                    "subnet_mask": addr.subnet_mask,
+                    "is_loopback": addr.is_loopback,
+                }
+            )
+
+        if adapter.wifi:
+            adapter_dict["wifi"] = {
+                "ssid": adapter.wifi.ssid,
+                "bssid": adapter.wifi.bssid,
+                "signal_strength": adapter.wifi.signal_strength,
+                "auth_type": adapter.wifi.auth_type,
+                "radio_type": adapter.wifi.radio_type,
+                "channel": adapter.wifi.channel,
+                "frequency_mhz": adapter.wifi.frequency_mhz,
+            }
+
+        if adapter.vpn:
+            adapter_dict["vpn"] = {
+                "connection_status": adapter.vpn.connection_status,
+                "tunnel_type": adapter.vpn.tunnel_type,
+            }
+
+        payload["adapters"].append(adapter_dict)
+
+    return payload

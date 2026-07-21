@@ -23,6 +23,7 @@ class InventoryNetworkAddress(Base):
     address: Mapped[str] = mapped_column(String, index=True, nullable=False)
     family: Mapped[str] = mapped_column(String(10), nullable=False)  # ipv4 | ipv6
     prefix_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    subnet_mask: Mapped[str | None] = mapped_column(String, nullable=True)
     is_loopback: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     adapter: Mapped["InventoryNetworkAdapter"] = relationship(

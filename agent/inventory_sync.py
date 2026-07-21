@@ -269,3 +269,86 @@ def _run_sync_security(cfg: AgentConfig) -> None:
 
     upload_duration_ms = int((time.monotonic() - t1) * 1000)
     log.info("Security inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
+
+
+def sync_network(config: AgentConfig | None = None) -> None:
+    """
+    Run the complete network inventory synchronization cycle.
+
+    Parameters
+    ----------
+    config:
+        Agent configuration instance.  Defaults to the module-level
+        ``agent_settings`` singleton when ``None``.
+
+    Returns
+    -------
+    None
+        Always.  The function never raises or propagates exceptions.
+    """
+    cfg = config or agent_settings
+
+    try:
+        _run_sync_network(cfg)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Unexpected error in Network inventory sync — agent continues",
+            error=str(exc),
+        )
+
+
+def _run_sync_network(cfg: AgentConfig) -> None:
+    """Internal sync implementation — called by :func:`sync_network`."""
+    from api.inventory import submit_network
+    from collectors.network import collect_network
+
+    log = logger.bind(category="network", agent_version=cfg.agent_version)
+
+    # ── 1. Collection ────────────────────────────────────────────────────────
+    log.info("Network inventory collection started")
+    t0 = time.monotonic()
+
+    inventory = collect_network()
+
+    collection_duration_ms = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "Network inventory collection completed",
+        duration_ms=collection_duration_ms,
+        identity_fqdn=inventory.identity.fqdn,
+        adapters_count=len(inventory.adapters),
+    )
+
+    # ── 2. Serialization ─────────────────────────────────────────────────────
+    # Serialization and Hashing already done in the collector for Network, but to keep with architecture:  # noqa: E501
+    from utils.serialization import serialize_network
+
+    net_dict = serialize_network(inventory.identity, inventory.adapters)
+
+    payload_bytes = len(json.dumps(net_dict).encode("utf-8"))
+    log.info("Network inventory payload serialized", payload_bytes=payload_bytes)
+
+    # ── 3. Hashing ───────────────────────────────────────────────────────────
+    from utils.hashing import compute_inventory_hash
+
+    inventory_hash = compute_inventory_hash(net_dict)
+    log.info("Network inventory hash computed", inventory_hash=inventory_hash)
+
+    # ── 4. Build request body ────────────────────────────────────────────────
+    collected_at = datetime.now(UTC).isoformat()
+
+    request_body: dict = {
+        "collected_at": collected_at,
+        "agent_version": cfg.agent_version,
+        "inventory_hash": inventory_hash,
+        "identity": net_dict["identity"],
+        "adapters": net_dict["adapters"],
+    }
+
+    # ── 5. Upload ────────────────────────────────────────────────────────────
+    log.info("Network inventory upload started", inventory_hash=inventory_hash)
+    t1 = time.monotonic()
+
+    submit_network(body=request_body, config=cfg)
+
+    upload_duration_ms = int((time.monotonic() - t1) * 1000)
+    log.info("Network inventory sync cycle finished", upload_duration_ms=upload_duration_ms)

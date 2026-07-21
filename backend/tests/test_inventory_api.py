@@ -266,6 +266,11 @@ async def test_network_normalized_addresses(
     """An adapter with 3 IP addresses should create 3 rows in inventory_network_addresses."""
     endpoint, secret = enrolled_agent
     network_payload = {
+        "identity": {
+            "fqdn": "test.local",
+            "domain_workgroup": "local",
+            "primary_dns_suffix": "local",
+        },
         "adapters": [
             {
                 "name": "Ethernet0",

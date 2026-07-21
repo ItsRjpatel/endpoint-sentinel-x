@@ -13,10 +13,6 @@ from app.db.models.inventory_bitlocker_volume import InventoryBitlockerVolume  #
 from app.db.models.inventory_category_state import InventoryCategoryState  # noqa: F401
 from app.db.models.inventory_disk import InventoryDisk  # noqa: F401
 from app.db.models.inventory_firewall_profile import InventoryFirewallProfile  # noqa: F401
-from app.db.models.inventory_hardware import InventoryHardware  # noqa: F401
-from app.db.models.inventory_local_user import InventoryLocalUser  # noqa: F401
-from app.db.models.inventory_network_adapter import InventoryNetworkAdapter  # noqa: F401
-from app.db.models.inventory_network_address import InventoryNetworkAddress  # noqa: F401
 from app.db.models.inventory_os import InventoryOS  # noqa: F401
 from app.db.models.inventory_security_status import InventorySecurityStatus  # noqa: F401
 from app.db.models.inventory_service import InventoryService  # noqa: F401

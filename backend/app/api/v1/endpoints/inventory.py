@@ -470,22 +470,51 @@ async def submit_network(
         await db.flush()
         return InventoryResponse(status="skipped", category=category)
 
-    # Cascade delete handles addresses via FK
+    # Cascade delete handles addresses, wifi, and vpn via FK
     await db.execute(
         delete(InventoryNetworkAdapter).where(InventoryNetworkAdapter.endpoint_id == eid)
     )
+    from app.db.models.inventory_network_vpn import InventoryNetworkVpn
+    from app.db.models.inventory_network_wifi import InventoryNetworkWifi
+
+    # Update Network Identity on the Endpoint model
+    if payload.identity:
+        current_agent.fqdn = payload.identity.fqdn
+        current_agent.domain_workgroup = payload.identity.domain_workgroup
+        current_agent.primary_dns_suffix = payload.identity.primary_dns_suffix
+        # DB flush will save this automatically since current_agent is attached to the session
+
     for adapter_data in payload.adapters:
         adapter = InventoryNetworkAdapter(
             endpoint_id=eid,
             name=adapter_data.name,
+            friendly_name=adapter_data.friendly_name,
+            description=adapter_data.description,
+            interface_type=adapter_data.interface_type,
+            adapter_type=adapter_data.adapter_type,
+            manufacturer=adapter_data.manufacturer,
             mac_address=adapter_data.mac_address,
             is_physical=adapter_data.is_physical,
             is_virtual=adapter_data.is_virtual,
-            adapter_type=adapter_data.adapter_type,
             status=adapter_data.status,
+            admin_status=adapter_data.admin_status,
+            link_speed_bps=adapter_data.link_speed_bps,
+            mtu=adapter_data.mtu,
+            driver_version=adapter_data.driver_version,
+            driver_date=adapter_data.driver_date,
+            interface_index=adapter_data.interface_index,
+            interface_guid=adapter_data.interface_guid,
+            dhcp_enabled=adapter_data.dhcp_enabled,
+            dhcp_server=adapter_data.dhcp_server,
+            dhcp_lease_obtained=adapter_data.dhcp_lease_obtained,
+            dhcp_lease_expires=adapter_data.dhcp_lease_expires,
+            default_gateways=adapter_data.default_gateways,
+            dns_servers=adapter_data.dns_servers,
+            dns_search_suffixes=adapter_data.dns_search_suffixes,
         )
         db.add(adapter)
         await db.flush()  # flush to get adapter.id
+
         for addr in adapter_data.addresses:
             db.add(
                 InventoryNetworkAddress(
@@ -493,7 +522,31 @@ async def submit_network(
                     address=addr.address,
                     family=addr.family,
                     prefix_length=addr.prefix_length,
+                    subnet_mask=addr.subnet_mask,
                     is_loopback=addr.is_loopback,
+                )
+            )
+
+        if adapter_data.wifi:
+            db.add(
+                InventoryNetworkWifi(
+                    adapter_id=adapter.id,
+                    ssid=adapter_data.wifi.ssid,
+                    bssid=adapter_data.wifi.bssid,
+                    signal_strength=adapter_data.wifi.signal_strength,
+                    auth_type=adapter_data.wifi.auth_type,
+                    radio_type=adapter_data.wifi.radio_type,
+                    channel=adapter_data.wifi.channel,
+                    frequency_mhz=adapter_data.wifi.frequency_mhz,
+                )
+            )
+
+        if adapter_data.vpn:
+            db.add(
+                InventoryNetworkVpn(
+                    adapter_id=adapter.id,
+                    connection_status=adapter_data.vpn.connection_status,
+                    tunnel_type=adapter_data.vpn.tunnel_type,
                 )
             )
 

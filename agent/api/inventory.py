@@ -233,6 +233,25 @@ def submit_security(body: dict, config: AgentConfig | None = None) -> None:
     )
 
 
+def submit_network(body: dict, config: AgentConfig | None = None) -> None:
+    """
+    Upload a network inventory payload to ``POST /api/v1/inventory/network``.
+
+    Parameters
+    ----------
+    body:
+        Fully-formed request body as a plain dictionary.
+    config:
+        Agent configuration instance.
+    """
+    _submit_inventory(
+        body=body,
+        endpoint_path="/api/v1/inventory/network",
+        category_name="Network",
+        config=config,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

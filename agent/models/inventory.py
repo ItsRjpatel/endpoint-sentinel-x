@@ -5,7 +5,7 @@ These Pydantic models mirror the backend HardwarePayload / HardwareInventoryRequ
 schemas so that validation happens on the agent before any bytes leave the host.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -165,3 +165,68 @@ class SecurityInventory(BaseModel):
 
 class SecurityInventoryRequest(InventoryMeta):
     security: SecurityInventory
+
+
+class NetworkIdentityPayload(BaseModel):
+    fqdn: str | None = None
+    domain_workgroup: str | None = None
+    primary_dns_suffix: str | None = None
+
+
+class AddressPayload(BaseModel):
+    address: str
+    family: str
+    prefix_length: int | None = None
+    subnet_mask: str | None = None
+    is_loopback: bool = False
+
+
+class WifiPayload(BaseModel):
+    ssid: str | None = None
+    bssid: str | None = None
+    signal_strength: int | None = None
+    auth_type: str | None = None
+    radio_type: str | None = None
+    channel: int | None = None
+    frequency_mhz: int | None = None
+
+
+class VpnPayload(BaseModel):
+    connection_status: str | None = None
+    tunnel_type: str | None = None
+
+
+class AdapterPayload(BaseModel):
+    name: str
+    friendly_name: str | None = None
+    description: str | None = None
+    interface_type: str | None = None
+    adapter_type: str | None = None
+    manufacturer: str | None = None
+    mac_address: str | None = None
+    is_physical: bool = True
+    is_virtual: bool = False
+    status: str | None = None
+    admin_status: str | None = None
+    link_speed_bps: int | None = None
+    mtu: int | None = None
+    driver_version: str | None = None
+    driver_date: date | None = None
+    interface_index: int | None = None
+    interface_guid: str | None = None
+    dhcp_enabled: bool | None = None
+    dhcp_server: str | None = None
+    dhcp_lease_obtained: datetime | None = None
+    dhcp_lease_expires: datetime | None = None
+    default_gateways: list[str] = Field(default_factory=list)
+    dns_servers: list[str] = Field(default_factory=list)
+    dns_search_suffixes: list[str] = Field(default_factory=list)
+
+    addresses: list[AddressPayload] = Field(default_factory=list)
+    wifi: WifiPayload | None = None
+    vpn: VpnPayload | None = None
+
+
+class NetworkInventoryRequest(InventoryMeta):
+    identity: NetworkIdentityPayload
+    adapters: list[AdapterPayload]

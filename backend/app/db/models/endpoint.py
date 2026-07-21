@@ -29,5 +29,10 @@ class Endpoint(BaseEntity):
     lifecycle_state: Mapped[str] = mapped_column(String(50), default="REGISTERED", nullable=False)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Network Identity
+    fqdn: Mapped[str | None] = mapped_column(String, nullable=True)
+    domain_workgroup: Mapped[str | None] = mapped_column(String, nullable=True)
+    primary_dns_suffix: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # Relationships
     organization: Mapped["Organization"] = relationship("Organization")
