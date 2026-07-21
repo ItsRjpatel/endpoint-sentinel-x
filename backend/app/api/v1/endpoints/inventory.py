@@ -606,29 +606,137 @@ async def submit_storage(
         await db.flush()
         return InventoryResponse(status="skipped", category=category)
 
+    # Cascade deletes
     await db.execute(delete(InventoryDisk).where(InventoryDisk.endpoint_id == eid))
     await db.execute(delete(InventoryVolume).where(InventoryVolume.endpoint_id == eid))
-    for d in payload.disks:
-        db.add(
-            InventoryDisk(
-                endpoint_id=eid,
-                model=d.model,
-                serial_number=d.serial_number,
-                size_bytes=d.size_bytes,
-                interface_type=d.interface_type,
-            )
-        )
+
+    from app.db.models.inventory_disk_smart import InventoryDiskSmart
+    from app.db.models.inventory_partition import InventoryPartition
+    from app.db.models.inventory_storage_pool import InventoryStoragePool
+    from app.db.models.inventory_virtual_disk import InventoryVirtualDisk
+    from app.db.models.inventory_volume_mount import InventoryVolumeMount
+
+    await db.execute(delete(InventoryStoragePool).where(InventoryStoragePool.endpoint_id == eid))
+
+    # Map volume_id_ref to db object IDs to link partitions
+    # So first insert Volumes
+    volume_map: dict[str, int] = {}
+
     for v in payload.volumes:
-        db.add(
-            InventoryVolume(
-                endpoint_id=eid,
-                drive_letter=v.drive_letter,
-                label=v.label,
-                filesystem=v.filesystem,
-                size_bytes=v.size_bytes,
-                free_bytes=v.free_bytes,
-            )
+        vol = InventoryVolume(
+            endpoint_id=eid,
+            drive_letter=v.drive_letter,
+            volume_name=v.volume_name,
+            file_system=v.file_system,
+            file_system_label=v.file_system_label,
+            file_system_version=v.file_system_version,
+            allocation_unit_size=v.allocation_unit_size,
+            total_size=v.total_size,
+            free_space=v.free_space,
+            used_space=v.used_space,
+            percentage_used=v.percentage_used,
+            percentage_free=v.percentage_free,
+            health_status=v.health_status,
+            compression_enabled=v.compression_enabled,
+            deduplication_enabled=v.deduplication_enabled,
+            shadow_copies_enabled=v.shadow_copies_enabled,
         )
+        db.add(vol)
+        await db.flush()
+
+        if v.volume_id_ref:
+            volume_map[v.volume_id_ref] = vol.id
+
+        for m in v.mounts:
+            db.add(InventoryVolumeMount(endpoint_id=eid, volume_id=vol.id, mount_path=m.mount_path))
+
+    for d in payload.disks:
+        disk = InventoryDisk(
+            endpoint_id=eid,
+            device_name=d.device_name,
+            friendly_name=d.friendly_name,
+            manufacturer=d.manufacturer,
+            model=d.model,
+            serial_number=d.serial_number,
+            firmware_version=d.firmware_version,
+            interface_type=d.interface_type,
+            bus_type=d.bus_type,
+            media_type=d.media_type,
+            health_status=d.health_status,
+            operational_status=d.operational_status,
+            size_bytes=d.size_bytes,
+            logical_sector_size=d.logical_sector_size,
+            physical_sector_size=d.physical_sector_size,
+            rotation_rate=d.rotation_rate,
+            is_removable=d.is_removable,
+            is_boot_disk=d.is_boot_disk,
+            is_system_disk=d.is_system_disk,
+            unique_id=d.unique_id,
+            location=d.location,
+            partition_style=d.partition_style,
+            is_offline=d.is_offline,
+            is_read_only=d.is_read_only,
+            can_pool=d.can_pool,
+        )
+        db.add(disk)
+        await db.flush()
+
+        if d.smart:
+            db.add(
+                InventoryDiskSmart(
+                    disk_id=disk.id,
+                    predict_failure=d.smart.predict_failure,
+                    temperature=d.smart.temperature,
+                    wear_level=d.smart.wear_level,
+                    remaining_life=d.smart.remaining_life,
+                    reallocated_sector_count=d.smart.reallocated_sector_count,
+                )
+            )
+
+        for p in d.partitions:
+            db.add(
+                InventoryPartition(
+                    endpoint_id=eid,
+                    disk_id=disk.id,
+                    volume_id=volume_map.get(p.volume_id_ref) if p.volume_id_ref else None,
+                    partition_number=p.partition_number,
+                    partition_style=p.partition_style,
+                    partition_type=p.partition_type,
+                    size_bytes=p.size_bytes,
+                    offset_bytes=p.offset_bytes,
+                    drive_letter=p.drive_letter,
+                    is_boot=p.is_boot,
+                    is_active=p.is_active,
+                    is_hidden=p.is_hidden,
+                    is_read_only=p.is_read_only,
+                )
+            )
+
+    for sp in payload.storage_pools:
+        pool = InventoryStoragePool(
+            endpoint_id=eid,
+            pool_name=sp.pool_name,
+            health_status=sp.health_status,
+            operational_status=sp.operational_status,
+            total_capacity=sp.total_capacity,
+            free_capacity=sp.free_capacity,
+        )
+        db.add(pool)
+        await db.flush()
+
+        for vd in sp.virtual_disks:
+            db.add(
+                InventoryVirtualDisk(
+                    endpoint_id=eid,
+                    pool_id=pool.id,
+                    virtual_disk_name=vd.virtual_disk_name,
+                    resiliency_type=vd.resiliency_type,
+                    provisioning_type=vd.provisioning_type,
+                    health_status=vd.health_status,
+                    operational_status=vd.operational_status,
+                    size_bytes=vd.size_bytes,
+                )
+            )
 
     await _upsert_category_state(
         db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at

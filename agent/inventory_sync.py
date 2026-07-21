@@ -352,3 +352,81 @@ def _run_sync_network(cfg: AgentConfig) -> None:
 
     upload_duration_ms = int((time.monotonic() - t1) * 1000)
     log.info("Network inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
+
+
+def sync_storage(config: AgentConfig | None = None) -> None:
+    """
+    Run the complete storage inventory synchronization cycle.
+
+    Parameters
+    ----------
+    config:
+        Agent configuration instance.  Defaults to the module-level
+        ``agent_settings`` singleton when ``None``.
+    """
+    cfg = config or agent_settings
+
+    try:
+        _run_sync_storage(cfg)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Unexpected error in Storage inventory sync — agent continues",
+            error=str(exc),
+        )
+
+
+def _run_sync_storage(cfg: AgentConfig) -> None:
+    """Internal sync implementation — called by :func:`sync_storage`."""
+    from api.inventory import submit_storage
+    from collectors.storage import collect_storage
+
+    log = logger.bind(category="storage", agent_version=cfg.agent_version)
+
+    # ── 1. Collection ────────────────────────────────────────────────────────
+    log.info("Storage inventory collection started")
+    t0 = time.monotonic()
+
+    inventory = collect_storage()
+
+    collection_duration_ms = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "Storage inventory collection completed",
+        duration_ms=collection_duration_ms,
+        disks_count=len(inventory.disks),
+        volumes_count=len(inventory.volumes),
+        pools_count=len(inventory.storage_pools),
+    )
+
+    # ── 2. Serialization ─────────────────────────────────────────────────────
+    from utils.serialization import serialize_storage
+
+    storage_dict = serialize_storage(inventory)
+    payload_bytes = len(json.dumps(storage_dict).encode("utf-8"))
+    log.info("Storage inventory payload serialized", payload_bytes=payload_bytes)
+
+    # ── 3. Hashing ───────────────────────────────────────────────────────────
+    from utils.hashing import compute_inventory_hash
+
+    inventory_hash = compute_inventory_hash(storage_dict)
+    log.info("Storage inventory hash computed", inventory_hash=inventory_hash)
+
+    # ── 4. Build request body ────────────────────────────────────────────────
+    collected_at = datetime.now(UTC).isoformat()
+
+    request_body: dict = {
+        "collected_at": collected_at,
+        "agent_version": cfg.agent_version,
+        "inventory_hash": inventory_hash,
+        "disks": storage_dict["disks"],
+        "volumes": storage_dict["volumes"],
+        "storage_pools": storage_dict["storage_pools"],
+    }
+
+    # ── 5. Upload ────────────────────────────────────────────────────────────
+    log.info("Storage inventory upload started", inventory_hash=inventory_hash)
+    t1 = time.monotonic()
+
+    submit_storage(body=request_body, config=cfg)
+
+    upload_duration_ms = int((time.monotonic() - t1) * 1000)
+    log.info("Storage inventory sync cycle finished", upload_duration_ms=upload_duration_ms)

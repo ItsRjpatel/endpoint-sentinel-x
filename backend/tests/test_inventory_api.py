@@ -413,3 +413,67 @@ async def test_os_inventory_accepted(
     assert os_row is not None
     assert os_row.name == "Windows 11"
     assert os_row.build_number == "22621"
+
+
+# ---------------------------------------------------------------------------
+# Storage inventory
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_storage_inventory_accepted(
+    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
+) -> None:
+    from app.db.models.inventory_disk import InventoryDisk
+    from app.db.models.inventory_volume import InventoryVolume
+
+    endpoint, secret = enrolled_agent
+    storage_data = {
+        "disks": [
+            {
+                "device_name": "PhysicalDrive0",
+                "model": "Samsung SSD 980",
+                "size_bytes": 1000204886016,
+                "interface_type": "NVMe",
+                "is_boot_disk": True,
+                "partitions": [
+                    {"partition_number": 1, "size_bytes": 524288000, "drive_letter": "C"}
+                ],
+            }
+        ],
+        "volumes": [
+            {
+                "drive_letter": "C",
+                "file_system": "NTFS",
+                "total_size": 999000000000,
+                "free_space": 500000000000,
+            }
+        ],
+        "storage_pools": [],
+    }
+    r = await client.post(
+        "/api/v1/inventory/storage",
+        headers=_agent_headers(endpoint, secret),
+        json={
+            "collected_at": datetime.now(UTC).isoformat(),
+            "agent_version": "1.0.0",
+            "inventory_hash": _make_hash(storage_data),
+            **storage_data,
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "accepted"
+
+    disks = await db_session.execute(
+        select(InventoryDisk).where(InventoryDisk.endpoint_id == endpoint.id)
+    )
+    disk_list = disks.scalars().all()
+    assert len(disk_list) == 1
+    assert disk_list[0].model == "Samsung SSD 980"
+
+    vols = await db_session.execute(
+        select(InventoryVolume).where(InventoryVolume.endpoint_id == endpoint.id)
+    )
+    vol_list = vols.scalars().all()
+    assert len(vol_list) == 1
+    assert vol_list[0].drive_letter == "C"

@@ -225,24 +225,103 @@ class NetworkInventoryRequest(InventoryMeta):
 # ---------------------------------------------------------------------------
 
 
+class SmartPayload(BaseModel):
+    predict_failure: bool | None = None
+    temperature: int | None = None
+    wear_level: int | None = None
+    remaining_life: int | None = None
+    reallocated_sector_count: int | None = None
+
+
+class PartitionPayload(BaseModel):
+    partition_number: int | None = None
+    partition_style: str | None = None
+    partition_type: str | None = None
+    size_bytes: int | None = None
+    offset_bytes: int | None = None
+    drive_letter: str | None = None
+    is_boot: bool | None = None
+    is_active: bool | None = None
+    is_hidden: bool | None = None
+    is_read_only: bool | None = None
+    volume_id_ref: str | None = None
+
+
 class DiskPayload(BaseModel):
+    device_name: str | None = None
+    friendly_name: str | None = None
+    manufacturer: str | None = None
     model: str | None = None
     serial_number: str | None = None
-    size_bytes: int | None = None
+    firmware_version: str | None = None
     interface_type: str | None = None
+    bus_type: str | None = None
+    media_type: str | None = None
+    health_status: str | None = None
+    operational_status: str | None = None
+    size_bytes: int | None = None
+    logical_sector_size: int | None = None
+    physical_sector_size: int | None = None
+    rotation_rate: int | None = None
+    is_removable: bool | None = None
+    is_boot_disk: bool | None = None
+    is_system_disk: bool | None = None
+    unique_id: str | None = None
+    location: str | None = None
+    partition_style: str | None = None
+    is_offline: bool | None = None
+    is_read_only: bool | None = None
+    can_pool: bool | None = None
+    smart: SmartPayload | None = None
+    partitions: list[PartitionPayload] = Field(default_factory=list)
+
+
+class VolumeMountPayload(BaseModel):
+    mount_path: str
 
 
 class VolumePayload(BaseModel):
+    volume_id_ref: str | None = None
     drive_letter: str | None = None
-    label: str | None = None
-    filesystem: str | None = None
+    volume_name: str | None = None
+    file_system: str | None = None
+    file_system_label: str | None = None
+    file_system_version: str | None = None
+    allocation_unit_size: int | None = None
+    total_size: int | None = None
+    free_space: int | None = None
+    used_space: int | None = None
+    percentage_used: float | None = None
+    percentage_free: float | None = None
+    health_status: str | None = None
+    compression_enabled: bool | None = None
+    deduplication_enabled: bool | None = None
+    shadow_copies_enabled: bool | None = None
+    mounts: list[VolumeMountPayload] = Field(default_factory=list)
+
+
+class VirtualDiskPayload(BaseModel):
+    virtual_disk_name: str
+    resiliency_type: str | None = None
+    provisioning_type: str | None = None
+    health_status: str | None = None
+    operational_status: str | None = None
     size_bytes: int | None = None
-    free_bytes: int | None = None
+
+
+class StoragePoolPayload(BaseModel):
+    pool_name: str
+    health_status: str | None = None
+    operational_status: str | None = None
+    total_capacity: int | None = None
+    free_capacity: int | None = None
+    virtual_disks: list[VirtualDiskPayload] = Field(default_factory=list)
 
 
 class StorageInventoryRequest(InventoryMeta):
     disks: list[DiskPayload] = Field(default_factory=list)
     volumes: list[VolumePayload] = Field(default_factory=list)
+    storage_pools: list[StoragePoolPayload] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

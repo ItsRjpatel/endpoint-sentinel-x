@@ -8,7 +8,12 @@ so that the SHA-256 hash remains stable between runs when data is unchanged.
 
 import structlog
 
-from models.inventory import HardwareInventory, OperatingSystemInventory, SecurityInventory
+from models.inventory import (
+    HardwareInventory,
+    OperatingSystemInventory,
+    SecurityInventory,
+    StorageInventoryRequest,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -276,5 +281,137 @@ def serialize_network(identity_payload, adapters_payload) -> dict:
             }
 
         payload["adapters"].append(adapter_dict)
+
+    return payload
+
+
+def serialize_storage(inventory: "StorageInventoryRequest") -> dict:
+    """
+    Convert storage inventory to a JSON-serializable ``dict``.
+    """
+    payload = {
+        "disks": [],
+        "volumes": [],
+        "storage_pools": [],
+    }
+
+    # Sort disks by device name
+    sorted_disks = sorted(inventory.disks, key=lambda d: str(d.device_name))
+    for disk in sorted_disks:
+        disk_dict = {
+            "device_name": disk.device_name,
+            "friendly_name": disk.friendly_name,
+            "manufacturer": disk.manufacturer,
+            "model": disk.model,
+            "serial_number": disk.serial_number,
+            "firmware_version": disk.firmware_version,
+            "interface_type": disk.interface_type,
+            "bus_type": disk.bus_type,
+            "media_type": disk.media_type,
+            "health_status": disk.health_status,
+            "operational_status": disk.operational_status,
+            "size_bytes": disk.size_bytes,
+            "logical_sector_size": disk.logical_sector_size,
+            "physical_sector_size": disk.physical_sector_size,
+            "rotation_rate": disk.rotation_rate,
+            "is_removable": disk.is_removable,
+            "is_boot_disk": disk.is_boot_disk,
+            "is_system_disk": disk.is_system_disk,
+            "unique_id": disk.unique_id,
+            "location": disk.location,
+            "partition_style": disk.partition_style,
+            "is_offline": disk.is_offline,
+            "is_read_only": disk.is_read_only,
+            "can_pool": disk.can_pool,
+            "smart": None,
+            "partitions": [],
+        }
+
+        if disk.smart:
+            disk_dict["smart"] = {
+                "predict_failure": disk.smart.predict_failure,
+                "temperature": disk.smart.temperature,
+                "wear_level": disk.smart.wear_level,
+                "remaining_life": disk.smart.remaining_life,
+                "reallocated_sector_count": disk.smart.reallocated_sector_count,
+            }
+
+        sorted_parts = sorted(disk.partitions, key=lambda p: p.partition_number or 0)
+        for part in sorted_parts:
+            disk_dict["partitions"].append(
+                {
+                    "partition_number": part.partition_number,
+                    "partition_style": part.partition_style,
+                    "partition_type": part.partition_type,
+                    "size_bytes": part.size_bytes,
+                    "offset_bytes": part.offset_bytes,
+                    "drive_letter": part.drive_letter,
+                    "is_boot": part.is_boot,
+                    "is_active": part.is_active,
+                    "is_hidden": part.is_hidden,
+                    "is_read_only": part.is_read_only,
+                    "volume_id_ref": part.volume_id_ref,
+                }
+            )
+
+        payload["disks"].append(disk_dict)
+
+    # Sort volumes by volume_id_ref or drive letter
+    sorted_volumes = sorted(
+        inventory.volumes, key=lambda v: str(v.volume_id_ref or v.drive_letter or "")
+    )
+    for vol in sorted_volumes:
+        vol_dict = {
+            "volume_id_ref": vol.volume_id_ref,
+            "drive_letter": vol.drive_letter,
+            "volume_name": vol.volume_name,
+            "file_system": vol.file_system,
+            "file_system_label": vol.file_system_label,
+            "file_system_version": vol.file_system_version,
+            "allocation_unit_size": vol.allocation_unit_size,
+            "total_size": vol.total_size,
+            "free_space": vol.free_space,
+            "used_space": vol.used_space,
+            "percentage_used": vol.percentage_used,
+            "percentage_free": vol.percentage_free,
+            "health_status": vol.health_status,
+            "compression_enabled": vol.compression_enabled,
+            "deduplication_enabled": vol.deduplication_enabled,
+            "shadow_copies_enabled": vol.shadow_copies_enabled,
+            "mounts": [],
+        }
+
+        sorted_mounts = sorted(vol.mounts, key=lambda m: str(m.mount_path))
+        for m in sorted_mounts:
+            vol_dict["mounts"].append({"mount_path": m.mount_path})
+
+        payload["volumes"].append(vol_dict)
+
+    # Sort pools by pool_name
+    sorted_pools = sorted(inventory.storage_pools, key=lambda p: str(p.pool_name))
+    for pool in sorted_pools:
+        pool_dict = {
+            "pool_name": pool.pool_name,
+            "health_status": pool.health_status,
+            "operational_status": pool.operational_status,
+            "total_capacity": pool.total_capacity,
+            "free_capacity": pool.free_capacity,
+            "virtual_disks": [],
+        }
+
+        sorted_vds = sorted(pool.virtual_disks, key=lambda vd: str(vd.virtual_disk_name))
+        for vd in sorted_vds:
+            pool_dict["virtual_disks"].append(
+                {
+                    "virtual_disk_name": vd.virtual_disk_name,
+                    "resiliency_type": vd.resiliency_type,
+                    "provisioning_type": vd.provisioning_type,
+                    "health_status": vd.health_status,
+                    "operational_status": vd.operational_status,
+                    "size_bytes": vd.size_bytes,
+                }
+            )
+
+        payload["storage_pools"].append(pool_dict)
 
     return payload

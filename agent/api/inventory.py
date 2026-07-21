@@ -252,6 +252,25 @@ def submit_network(body: dict, config: AgentConfig | None = None) -> None:
     )
 
 
+def submit_storage(body: dict, config: AgentConfig | None = None) -> None:
+    """
+    Upload a storage inventory payload to ``POST /api/v1/inventory/storage``.
+
+    Parameters
+    ----------
+    body:
+        Fully-formed request body as a plain dictionary.
+    config:
+        Agent configuration instance.
+    """
+    _submit_inventory(
+        body=body,
+        endpoint_path="/api/v1/inventory/storage",
+        category_name="Storage",
+        config=config,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
