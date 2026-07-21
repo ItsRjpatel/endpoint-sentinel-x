@@ -48,10 +48,19 @@ class HardwareInventoryRequest(InventoryMeta):
 
 class OSPayload(BaseModel):
     name: str
+    edition: str | None = None
     version: str
     build_number: str | None = None
+    display_version: str | None = None
     architecture: str
     install_date: datetime | None = None
+    last_boot_time: datetime | None = None
+    system_uptime_seconds: int | None = None
+    computer_name: str | None = None
+    domain: str | None = None
+    registered_owner: str | None = None
+    time_zone: str | None = None
+    system_locale: str | None = None
 
 
 class OSInventoryRequest(InventoryMeta):

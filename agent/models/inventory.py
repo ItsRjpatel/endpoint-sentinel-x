@@ -56,3 +56,34 @@ class HardwareInventoryRequest(InventoryMeta):
     """
 
     hardware: HardwareInventory
+
+
+class OperatingSystemInventory(BaseModel):
+    """Strongly-typed model for OS inventory data collected from the host."""
+
+    name: str = Field(
+        default="Unknown", description="Operating System Name (e.g., Microsoft Windows 11 Pro)"
+    )
+    edition: str | None = Field(default=None, description="OS Edition")
+    version: str = Field(default="Unknown", description="OS Version string")
+    build_number: str | None = Field(default=None, description="OS Build Number")
+    display_version: str | None = Field(
+        default=None, description="Display Version (e.g., 22H2, 23H2)"
+    )
+    architecture: str = Field(default="Unknown", description="OS Architecture (e.g., 64-bit)")
+    install_date: datetime | None = Field(default=None, description="Installation Date")
+    last_boot_time: datetime | None = Field(default=None, description="Last Boot Time")
+    system_uptime_seconds: int | None = Field(
+        default=None, ge=0, description="System Uptime in seconds"
+    )
+    computer_name: str | None = Field(default=None, description="Computer Name")
+    domain: str | None = Field(default=None, description="Domain or Workgroup")
+    registered_owner: str | None = Field(default=None, description="Registered Owner")
+    time_zone: str | None = Field(default=None, description="Time Zone Caption")
+    system_locale: str | None = Field(default=None, description="System Locale / Language")
+
+
+class OSInventoryRequest(InventoryMeta):
+    """Full request body sent to ``POST /api/v1/inventory/operating-system``."""
+
+    os: OperatingSystemInventory

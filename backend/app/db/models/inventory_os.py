@@ -23,9 +23,18 @@ class InventoryOS(Base, TimestampMixin):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
+    edition: Mapped[str | None] = mapped_column(String, nullable=True)
     version: Mapped[str] = mapped_column(String, nullable=False)
     build_number: Mapped[str | None] = mapped_column(String, nullable=True)
+    display_version: Mapped[str | None] = mapped_column(String, nullable=True)
     architecture: Mapped[str] = mapped_column(String, nullable=False)
     install_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_boot_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    system_uptime_seconds: Mapped[int | None] = mapped_column(nullable=True)
+    computer_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    domain: Mapped[str | None] = mapped_column(String, nullable=True)
+    registered_owner: Mapped[str | None] = mapped_column(String, nullable=True)
+    time_zone: Mapped[str | None] = mapped_column(String, nullable=True)
+    system_locale: Mapped[str | None] = mapped_column(String, nullable=True)
 
     endpoint: Mapped["Endpoint"] = relationship("Endpoint")

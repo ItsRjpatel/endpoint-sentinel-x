@@ -69,47 +69,22 @@ _NO_RETRY_STATUSES: frozenset[int] = frozenset({401, 403, 409, 413})
 # ---------------------------------------------------------------------------
 
 
-def submit_hardware(body: dict, config: AgentConfig | None = None) -> None:
-    """
-    Upload a hardware inventory payload to ``POST /api/v1/inventory/hardware``.
-
-    Parameters
-    ----------
-    body:
-        Fully-formed request body as a plain dictionary.  Must conform to the
-        ``HardwareInventoryRequest`` schema expected by the backend.
-    config:
-        Agent configuration instance.  Defaults to the module-level
-        ``agent_settings`` singleton when ``None``.
-
-    Behaviour
-    ---------
-    * **200 accepted** — logs success and returns.
-    * **200 skipped** — inventory hash matched a previous upload; logs skip and returns.
-    * **401 Unauthorized** — logs error; does not retry.
-    * **403 Forbidden** — agent decommissioned; logs error; does not retry.
-    * **409 Conflict** — stale snapshot; logs warning; does not retry.
-    * **413 Payload Too Large** — logs error; does not retry.
-    * **Other 4xx/5xx** — logs error; does not retry.
-    * **Connection / timeout errors** — retried up to 3 times with exponential backoff.
-    * Any unhandled exception is caught; the function always returns normally.
-
-    Secrets
-    -------
-    Credential values are never logged.
-    """
+def _submit_inventory(
+    body: dict, endpoint_path: str, category_name: str, config: AgentConfig | None = None
+) -> None:
+    """Internal helper to upload any inventory payload with retry logic."""
     cfg = config or agent_settings
     client = _get_http_client(cfg)
 
-    url = f"{cfg.api_base_url.rstrip('/')}/api/v1/inventory/hardware"
+    url = f"{cfg.api_base_url.rstrip('/')}{endpoint_path}"
     headers = {
         "X-Agent-ID": cfg.agent_id,
         "X-Agent-Secret": cfg.agent_secret,
         "Content-Type": "application/json",
     }
 
-    log = logger.bind(url=url, agent_id=cfg.agent_id, category="hardware")
-    log.info("Hardware inventory upload started")
+    log = logger.bind(url=url, agent_id=cfg.agent_id, category=category_name.lower())
+    log.info(f"{category_name} inventory upload started")
 
     attempt = 0
     while attempt <= _MAX_RETRIES - 1:
@@ -119,14 +94,14 @@ def submit_hardware(body: dict, config: AgentConfig | None = None) -> None:
             attempt += 1
             if attempt >= _MAX_RETRIES:
                 log.error(
-                    "Hardware inventory upload failed after all retries",
+                    f"{category_name} inventory upload failed after all retries",
                     error=str(exc),
                     attempts=attempt,
                 )
                 return
             backoff = _BACKOFF_SECONDS[attempt - 1]
             log.warning(
-                "Network error during hardware inventory upload — retrying",
+                f"Network error during {category_name.lower()} inventory upload — retrying",
                 error=str(exc),
                 attempt=attempt,
                 backoff_seconds=backoff,
@@ -137,14 +112,14 @@ def submit_hardware(body: dict, config: AgentConfig | None = None) -> None:
             attempt += 1
             if attempt >= _MAX_RETRIES:
                 log.error(
-                    "Hardware inventory upload timed out after all retries",
+                    f"{category_name} inventory upload timed out after all retries",
                     error=str(exc),
                     attempts=attempt,
                 )
                 return
             backoff = _BACKOFF_SECONDS[attempt - 1]
             log.warning(
-                "Timeout during hardware inventory upload — retrying",
+                f"Timeout during {category_name.lower()} inventory upload — retrying",
                 error=str(exc),
                 attempt=attempt,
                 backoff_seconds=backoff,
@@ -152,7 +127,9 @@ def submit_hardware(body: dict, config: AgentConfig | None = None) -> None:
             time.sleep(backoff)
             continue
         except Exception as exc:  # noqa: BLE001
-            log.error("Unexpected error during hardware inventory upload", error=str(exc))
+            log.error(
+                f"Unexpected error during {category_name.lower()} inventory upload", error=str(exc)
+            )
             return
 
         # ── Response handling ────────────────────────────────────────────────
@@ -168,24 +145,71 @@ def submit_hardware(body: dict, config: AgentConfig | None = None) -> None:
             upload_status = data.get("status", "unknown")
 
             if upload_status == "skipped":
-                log.info("Hardware inventory upload skipped (hash unchanged)", status=upload_status)
+                log.info(
+                    f"{category_name} inventory upload skipped (hash unchanged)",
+                    status=upload_status,
+                )
             else:
-                log.info("Hardware inventory upload completed successfully", status=upload_status)
+                log.info(
+                    f"{category_name} inventory upload completed successfully", status=upload_status
+                )
             return
 
         if status_code in _NO_RETRY_STATUSES:
-            _log_terminal_error(log, status_code, response)
+            _log_terminal_error(log, status_code, response, category_name=category_name)
             return
 
         # Unexpected status — log and bail without retry.
         log.error(
-            "Hardware inventory upload failed with unexpected HTTP status",
+            f"{category_name} inventory upload failed with unexpected HTTP status",
             http_status=status_code,
         )
         return
 
     # Exhausted retries (should be unreachable; loop returns internally).
-    log.error("Hardware inventory upload exhausted all retry attempts")
+    log.error(f"{category_name} inventory upload exhausted all retry attempts")
+
+
+def submit_hardware(body: dict, config: AgentConfig | None = None) -> None:
+    """
+    Upload a hardware inventory payload to ``POST /api/v1/inventory/hardware``.
+
+    Parameters
+    ----------
+    body:
+        Fully-formed request body as a plain dictionary.  Must conform to the
+        ``HardwareInventoryRequest`` schema expected by the backend.
+    config:
+        Agent configuration instance.  Defaults to the module-level
+        ``agent_settings`` singleton when ``None``.
+    """
+    _submit_inventory(
+        body=body,
+        endpoint_path="/api/v1/inventory/hardware",
+        category_name="Hardware",
+        config=config,
+    )
+
+
+def submit_os(body: dict, config: AgentConfig | None = None) -> None:
+    """
+    Upload an operating system inventory payload to ``POST /api/v1/inventory/operating-system``.
+
+    Parameters
+    ----------
+    body:
+        Fully-formed request body as a plain dictionary.  Must conform to the
+        ``OSInventoryRequest`` schema expected by the backend.
+    config:
+        Agent configuration instance.  Defaults to the module-level
+        ``agent_settings`` singleton when ``None``.
+    """
+    _submit_inventory(
+        body=body,
+        endpoint_path="/api/v1/inventory/operating-system",
+        category_name="OS",
+        config=config,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -194,14 +218,17 @@ def submit_hardware(body: dict, config: AgentConfig | None = None) -> None:
 
 
 def _log_terminal_error(
-    log: structlog.BoundLogger, status_code: int, response: httpx.Response
+    log: structlog.BoundLogger,
+    status_code: int,
+    response: httpx.Response,
+    category_name: str = "Hardware",
 ) -> None:
     """Log a descriptive message for non-retryable HTTP error responses."""
     messages: dict[int, str] = {
-        401: "Hardware inventory upload rejected: agent unauthorized (401)",
-        403: "Hardware inventory upload rejected: agent forbidden/decommissioned (403)",
-        409: "Hardware inventory upload conflict: stale snapshot rejected by server (409)",
-        413: "Hardware inventory upload rejected: payload too large (413)",
+        401: f"{category_name} inventory upload rejected: agent unauthorized (401)",
+        403: f"{category_name} inventory upload rejected: agent forbidden/decommissioned (403)",
+        409: f"{category_name} inventory upload conflict: stale snapshot rejected by server (409)",
+        413: f"{category_name} inventory upload rejected: payload too large (413)",
     }
-    msg = messages.get(status_code, f"Hardware inventory upload failed (HTTP {status_code})")
+    msg = messages.get(status_code, f"{category_name} inventory upload failed (HTTP {status_code})")
     log.error(msg, http_status=status_code)

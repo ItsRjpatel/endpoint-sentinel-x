@@ -8,7 +8,7 @@ so that the SHA-256 hash remains stable between runs when data is unchanged.
 
 import structlog
 
-from models.inventory import HardwareInventory
+from models.inventory import HardwareInventory, OperatingSystemInventory
 
 logger = structlog.get_logger(__name__)
 
@@ -41,4 +41,39 @@ def serialize_hardware(inventory: HardwareInventory) -> dict:
         "system_manufacturer": inventory.system_manufacturer,
         "system_model": inventory.system_model,
         "bios_version": inventory.bios_version,
+    }
+
+
+def serialize_os(inventory: OperatingSystemInventory) -> dict:
+    """
+    Convert an :class:`OperatingSystemInventory` to a JSON-serializable ``dict``.
+
+    Parameters
+    ----------
+    inventory:
+        Validated :class:`OperatingSystemInventory` instance returned by the collector.
+
+    Returns
+    -------
+    dict
+        A plain dictionary ready for JSON encoding and hashing.
+    """
+    return {
+        "name": inventory.name,
+        "edition": inventory.edition,
+        "version": inventory.version,
+        "build_number": inventory.build_number,
+        "display_version": inventory.display_version,
+        "architecture": inventory.architecture,
+        # Convert datetime to ISO string if present
+        "install_date": inventory.install_date.isoformat() if inventory.install_date else None,
+        "last_boot_time": inventory.last_boot_time.isoformat()
+        if inventory.last_boot_time
+        else None,
+        "system_uptime_seconds": inventory.system_uptime_seconds,
+        "computer_name": inventory.computer_name,
+        "domain": inventory.domain,
+        "registered_owner": inventory.registered_owner,
+        "time_zone": inventory.time_zone,
+        "system_locale": inventory.system_locale,
     }

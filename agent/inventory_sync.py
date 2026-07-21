@@ -29,11 +29,12 @@ from datetime import UTC, datetime
 
 import structlog
 
-from api.inventory import submit_hardware
-from collectors.hardware import collect
+from api.inventory import submit_hardware, submit_os
+from collectors.hardware import collect as collect_hardware
+from collectors.operating_system import collect as collect_os
 from config.settings import AgentConfig, agent_settings
 from utils.hashing import compute_inventory_hash
-from utils.serialization import serialize_hardware
+from utils.serialization import serialize_hardware, serialize_os
 
 logger = structlog.get_logger(__name__)
 
@@ -56,7 +57,7 @@ def sync_hardware(config: AgentConfig | None = None) -> None:
     cfg = config or agent_settings
 
     try:
-        _run_sync(cfg)
+        _run_sync_hardware(cfg)
     except Exception as exc:  # noqa: BLE001
         # Safety net — should never be reached given inner try/except blocks,
         # but prevents any unforeseen path from crashing the agent.
@@ -66,7 +67,7 @@ def sync_hardware(config: AgentConfig | None = None) -> None:
         )
 
 
-def _run_sync(cfg: AgentConfig) -> None:
+def _run_sync_hardware(cfg: AgentConfig) -> None:
     """Internal sync implementation — called by :func:`sync_hardware`."""
     log = logger.bind(category="hardware", agent_version=cfg.agent_version)
 
@@ -74,7 +75,7 @@ def _run_sync(cfg: AgentConfig) -> None:
     log.info("Hardware inventory collection started")
     t0 = time.monotonic()
 
-    inventory = collect()
+    inventory = collect_hardware()
 
     collection_duration_ms = int((time.monotonic() - t0) * 1000)
     log.info(
@@ -114,3 +115,77 @@ def _run_sync(cfg: AgentConfig) -> None:
 
     upload_duration_ms = int((time.monotonic() - t1) * 1000)
     log.info("Hardware inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
+
+
+def sync_os(config: AgentConfig | None = None) -> None:
+    """
+    Run the complete operating system inventory synchronization cycle.
+
+    Parameters
+    ----------
+    config:
+        Agent configuration instance.  Defaults to the module-level
+        ``agent_settings`` singleton when ``None``.
+
+    Returns
+    -------
+    None
+        Always.  The function never raises or propagates exceptions.
+    """
+    cfg = config or agent_settings
+
+    try:
+        _run_sync_os(cfg)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Unexpected error in OS inventory sync — agent continues",
+            error=str(exc),
+        )
+
+
+def _run_sync_os(cfg: AgentConfig) -> None:
+    """Internal sync implementation — called by :func:`sync_os`."""
+    log = logger.bind(category="os", agent_version=cfg.agent_version)
+
+    # ── 1. Collection ────────────────────────────────────────────────────────
+    log.info("OS inventory collection started")
+    t0 = time.monotonic()
+
+    inventory = collect_os()
+
+    collection_duration_ms = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "OS inventory collection completed",
+        duration_ms=collection_duration_ms,
+        os_name=inventory.name,
+        os_version=inventory.version,
+    )
+
+    # ── 2. Serialization ─────────────────────────────────────────────────────
+    os_dict = serialize_os(inventory)
+
+    payload_bytes = len(json.dumps(os_dict).encode("utf-8"))
+    log.info("OS inventory payload serialized", payload_bytes=payload_bytes)
+
+    # ── 3. Hashing ───────────────────────────────────────────────────────────
+    inventory_hash = compute_inventory_hash(os_dict)
+    log.info("OS inventory hash computed", inventory_hash=inventory_hash)
+
+    # ── 4. Build request body ────────────────────────────────────────────────
+    collected_at = datetime.now(UTC).isoformat()
+
+    request_body: dict = {
+        "collected_at": collected_at,
+        "agent_version": cfg.agent_version,
+        "inventory_hash": inventory_hash,
+        "os": os_dict,
+    }
+
+    # ── 5. Upload ────────────────────────────────────────────────────────────
+    log.info("OS inventory upload started", inventory_hash=inventory_hash)
+    t1 = time.monotonic()
+
+    submit_os(body=request_body, config=cfg)
+
+    upload_duration_ms = int((time.monotonic() - t1) * 1000)
+    log.info("OS inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
