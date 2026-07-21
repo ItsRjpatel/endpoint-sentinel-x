@@ -32,7 +32,11 @@ import structlog
 from config.settings import AgentConfig, agent_settings
 
 if TYPE_CHECKING:
-    from models.inventory import ServicesInventoryRequest, WindowsUpdatesInventoryRequest
+    from models.inventory import (
+        LocalUsersInventoryRequest,
+        ServicesInventoryRequest,
+        WindowsUpdatesInventoryRequest,
+    )
 
 logger = structlog.get_logger(__name__)
 
@@ -232,6 +236,25 @@ def submit_services(payload: "ServicesInventoryRequest") -> None:
         body=payload_dict,
         endpoint_path="/api/v1/inventory/services",
         category_name="Services",
+    )
+
+
+def submit_local_users(payload: "LocalUsersInventoryRequest") -> None:
+    """
+    Submits a Local Users inventory payload to the backend.
+
+    :param payload: The full, validated inventory payload object (including hash).
+    """
+    logger.debug(
+        "Submitting local users inventory payload",
+        inventory_hash=payload.inventory_hash,
+        user_count=len(payload.users),
+    )
+    payload_dict = payload.model_dump(mode="json")
+    _submit_inventory(
+        body=payload_dict,
+        endpoint_path="/api/v1/inventory/local-users",
+        category_name="Local Users",
     )
 
 

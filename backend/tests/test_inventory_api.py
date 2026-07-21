@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.endpoint import Endpoint
 from app.db.models.inventory_hardware import InventoryHardware
+from app.db.models.inventory_local_user import InventoryLocalUser
 from app.db.models.inventory_network_adapter import InventoryNetworkAdapter
 from app.db.models.inventory_network_address import InventoryNetworkAddress
 from app.db.models.inventory_os import InventoryOS
@@ -605,3 +606,192 @@ async def test_software_inventory_accepted(
     assert len(software_list) == 2
     assert any(s.name == "Google Chrome" and s.install_scope == "Machine" for s in software_list)
     assert any(s.name == "Visual Studio Code" and s.install_scope == "User" for s in software_list)
+
+
+# ---------------------------------------------------------------------------
+# Local Users tests
+# ---------------------------------------------------------------------------
+
+_LOCAL_USER_PAYLOAD = {
+    "sid": "S-1-5-21-1234567890-1234567890-1234567890-500",
+    "username": "Administrator",
+    "full_name": None,
+    "description": "Built-in administrator",
+    "account_type": "LocalAccount",
+    "is_enabled": True,
+    "is_locked": False,
+    "is_password_required": True,
+    "is_password_change_allowed": True,
+    "password_expires": False,
+    "password_never_expires": True,
+    "password_last_set": "2024-01-01T00:00:00Z",
+    "last_logon": "2024-07-01T10:00:00Z",
+    "last_logoff": None,
+    "account_created": None,
+    "account_expires": None,
+    "bad_logon_count": 0,
+    "home_directory": None,
+    "profile_path": None,
+    "script_path": None,
+    "primary_group": None,
+    "local_groups": ["Administrators"],
+    "is_builtin_account": True,
+    "is_administrator": True,
+    "is_guest": False,
+}
+
+
+@pytest.mark.anyio
+async def test_submit_local_users_accepted(
+    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
+) -> None:
+    endpoint, secret = enrolled_agent
+    inv_hash = "b" * 64
+    payload = {
+        "inventory_hash": inv_hash,
+        "agent_version": "1.0.0",
+        "collected_at": datetime.now(UTC).isoformat(),
+        "users": [_LOCAL_USER_PAYLOAD],
+    }
+
+    response = await client.post(
+        "/api/v1/inventory/local-users",
+        json=payload,
+        headers=_agent_headers(endpoint, secret),
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+
+    # Verify DB persistence
+    result = await db_session.execute(
+        select(InventoryLocalUser).where(InventoryLocalUser.endpoint_id == endpoint.id)
+    )
+    users = result.scalars().all()
+    assert len(users) == 1
+    u = users[0]
+    assert u.sid == "S-1-5-21-1234567890-1234567890-1234567890-500"
+    assert u.username == "Administrator"
+    assert u.is_builtin_account is True
+    assert u.is_administrator is True
+    assert u.is_guest is False
+    assert u.local_groups == ["Administrators"]
+    assert u.password_never_expires is True
+
+
+@pytest.mark.anyio
+async def test_submit_local_users_skipped_on_duplicate_hash(
+    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
+) -> None:
+    endpoint, secret = enrolled_agent
+    inv_hash = "c" * 64
+    payload = {
+        "inventory_hash": inv_hash,
+        "agent_version": "1.0.0",
+        "collected_at": datetime.now(UTC).isoformat(),
+        "users": [_LOCAL_USER_PAYLOAD],
+    }
+    headers = _agent_headers(endpoint, secret)
+
+    r1 = await client.post("/api/v1/inventory/local-users", json=payload, headers=headers)
+    assert r1.status_code == 200
+    assert r1.json()["status"] == "accepted"
+
+    r2 = await client.post("/api/v1/inventory/local-users", json=payload, headers=headers)
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "skipped"
+
+
+@pytest.mark.anyio
+async def test_submit_local_users_atomic_replace(
+    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
+) -> None:
+    """Second submission with new hash must replace users atomically."""
+    endpoint, secret = enrolled_agent
+    headers = _agent_headers(endpoint, secret)
+
+    # First submission: 1 user
+    r1 = await client.post(
+        "/api/v1/inventory/local-users",
+        json={
+            "inventory_hash": "d" * 64,
+            "agent_version": "1.0.0",
+            "collected_at": datetime.now(UTC).isoformat(),
+            "users": [_LOCAL_USER_PAYLOAD],
+        },
+        headers=headers,
+    )
+    assert r1.json()["status"] == "accepted"
+
+    # Second submission: different user, different hash
+    guest = {
+        **_LOCAL_USER_PAYLOAD,
+        "sid": "S-1-5-21-1234567890-1234567890-1234567890-501",
+        "username": "Guest",
+        "is_builtin_account": True,
+        "is_administrator": False,
+        "is_guest": True,
+        "is_enabled": False,
+        "local_groups": ["Guests"],
+    }
+    r2 = await client.post(
+        "/api/v1/inventory/local-users",
+        json={
+            "inventory_hash": "e" * 64,
+            "agent_version": "1.0.0",
+            "collected_at": datetime.now(UTC).isoformat(),
+            "users": [guest],
+        },
+        headers=headers,
+    )
+    assert r2.json()["status"] == "accepted"
+
+    # DB must only contain the second user
+    result = await db_session.execute(
+        select(InventoryLocalUser).where(InventoryLocalUser.endpoint_id == endpoint.id)
+    )
+    users = result.scalars().all()
+    assert len(users) == 1
+    assert users[0].username == "Guest"
+    assert users[0].is_guest is True
+
+
+@pytest.mark.anyio
+async def test_submit_local_users_empty_list_accepted(
+    client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
+) -> None:
+    """Empty user list is valid (endpoint with no local users configured)."""
+    endpoint, secret = enrolled_agent
+    r = await client.post(
+        "/api/v1/inventory/local-users",
+        json={
+            "inventory_hash": "f" * 64,
+            "agent_version": "1.0.0",
+            "collected_at": datetime.now(UTC).isoformat(),
+            "users": [],
+        },
+        headers=_agent_headers(endpoint, secret),
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "accepted"
+
+
+@pytest.mark.anyio
+async def test_submit_local_users_no_auth_headers_rejected(client: AsyncClient) -> None:
+    """Requests without X-Agent-ID / X-Agent-Secret headers are rejected.
+
+    FastAPI validates required Header() parameters before executing any dependency,
+    so a missing required header returns 422 (Unprocessable Entity) rather than 401.
+    This is the same behaviour as every other inventory endpoint in this project.
+    """
+    r = await client.post(
+        "/api/v1/inventory/local-users",
+        json={
+            "inventory_hash": "a" * 64,
+            "agent_version": "1.0.0",
+            "collected_at": datetime.now(UTC).isoformat(),
+            "users": [],
+        },
+    )
+    # Missing required X-Agent-ID / X-Agent-Secret headers → 422 from FastAPI
+    assert r.status_code == 422
+

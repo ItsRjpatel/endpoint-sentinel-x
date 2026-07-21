@@ -421,3 +421,35 @@ class ServicePayload(BaseModel):
 
 class ServicesInventoryRequest(InventoryMeta):
     services: list[ServicePayload] = Field(default_factory=list)
+
+
+class LocalUserPayload(BaseModel):
+    sid: str
+    username: str
+    full_name: str | None = None
+    description: str | None = None
+    account_type: str | None = None
+    is_enabled: bool | None = None
+    is_locked: bool | None = None
+    is_password_required: bool | None = None
+    is_password_change_allowed: bool | None = None
+    password_expires: bool | None = None
+    password_never_expires: bool | None = None
+    password_last_set: datetime | None = None
+    last_logon: datetime | None = None
+    last_logoff: datetime | None = None
+    account_created: datetime | None = None
+    account_expires: datetime | None = None
+    bad_logon_count: int | None = None
+    home_directory: str | None = None
+    profile_path: str | None = None
+    script_path: str | None = None
+    primary_group: str | None = None
+    local_groups: list[str] = Field(default_factory=list)
+    is_builtin_account: bool | None = None
+    is_administrator: bool | None = None
+    is_guest: bool | None = None
+
+
+class LocalUsersInventoryRequest(InventoryMeta):
+    users: list[LocalUserPayload] = Field(default_factory=list)

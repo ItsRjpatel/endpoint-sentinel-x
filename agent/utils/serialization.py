@@ -19,7 +19,11 @@ from models.inventory import (
 )
 
 if TYPE_CHECKING:
-    from models.inventory import ServicesInventoryRequest, WindowsUpdatesInventoryRequest
+    from models.inventory import (
+        LocalUsersInventoryRequest,
+        ServicesInventoryRequest,
+        WindowsUpdatesInventoryRequest,
+    )
 
 logger = structlog.get_logger(__name__)
 
@@ -575,3 +579,76 @@ def serialize_services(inventory: "ServicesInventoryRequest") -> dict:
 
     sorted_payloads = sorted(raw_payloads, key=_sort_key)
     return {"services": sorted_payloads}
+
+
+# ---------------------------------------------------------------------------
+# Windows sentinel dates that mean "never / not set"
+# ---------------------------------------------------------------------------
+_SENTINEL_YEARS = {1601, 1}  # 1601-01-01 (Windows epoch) and 0001-01-01
+
+
+def _clean_date(dt: object) -> str | None:
+    """Return ISO string for valid datetimes; return None for Windows sentinel dates."""
+    if dt is None:
+        return None
+    year = getattr(dt, "year", None)
+    if year in _SENTINEL_YEARS:
+        return None
+    return dt.isoformat()
+
+
+def serialize_local_users(inventory: "LocalUsersInventoryRequest") -> dict:
+    """
+    Convert a :class:`LocalUsersInventoryRequest` to a JSON-serializable ``dict``
+    suitable for SHA-256 hashing.
+
+    Rules
+    -----
+    * Users are sorted deterministically by lowercase SID.
+    * All string values are stripped + lowercased **only** in the hash payload;
+      the original payload preserves original casing.
+    * Windows sentinel dates (year 1601 or 0001) are normalised to ``None``.
+    * ``local_groups`` is sorted alphabetically (case-insensitive) before hashing.
+    """
+
+    def _n(val: str | None) -> str | None:
+        """Normalise string: strip + lowercase, or None."""
+        return val.strip().lower() if val else None
+
+    def _groups(groups: list[str]) -> list[str]:
+        """Sort groups case-insensitively for deterministic hashing."""
+        return sorted([g.strip().lower() for g in groups if g])
+
+    raw = [
+        {
+            "sid": _n(u.sid),
+            "username": _n(u.username),
+            "full_name": _n(u.full_name),
+            "description": _n(u.description),
+            "account_type": _n(u.account_type),
+            "is_enabled": u.is_enabled,
+            "is_locked": u.is_locked,
+            "is_password_required": u.is_password_required,
+            "is_password_change_allowed": u.is_password_change_allowed,
+            "password_expires": u.password_expires,
+            "password_never_expires": u.password_never_expires,
+            "password_last_set": _clean_date(u.password_last_set),
+            "last_logon": _clean_date(u.last_logon),
+            "last_logoff": _clean_date(u.last_logoff),
+            "account_created": _clean_date(u.account_created),
+            "account_expires": _clean_date(u.account_expires),
+            "bad_logon_count": u.bad_logon_count,
+            "home_directory": _n(u.home_directory),
+            "profile_path": _n(u.profile_path),
+            "script_path": _n(u.script_path),
+            "primary_group": _n(u.primary_group),
+            "local_groups": _groups(u.local_groups),
+            "is_builtin_account": u.is_builtin_account,
+            "is_administrator": u.is_administrator,
+            "is_guest": u.is_guest,
+        }
+        for u in inventory.users
+    ]
+
+    sorted_users = sorted(raw, key=lambda u: str(u.get("sid") or ""))
+    return {"users": sorted_users}

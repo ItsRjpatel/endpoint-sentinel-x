@@ -938,76 +938,6 @@ async def submit_services(
 
 
 # ---------------------------------------------------------------------------
-# POST /inventory/local-users
-# ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/inventory/local-users",
-    response_model=InventoryResponse,
-    summary="Submit local users inventory",
-)
-async def submit_local_users(
-    request: Request,
-    payload: LocalUsersInventoryRequest,
-    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> InventoryResponse:
-    if (
-        request.headers.get("content-length")
-        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
-    ):
-        raise HTTPException(status_code=413, detail="Payload Too Large")
-
-    started_at = datetime.now(UTC)
-    category = "local-users"
-    eid = current_agent.id
-
-    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
-    if existing:
-        await _write_sync_log(
-            db,
-            eid,
-            category,
-            "skipped",
-            payload.inventory_hash,
-            payload.agent_version,
-            payload.collected_at,
-            started_at,
-        )
-        await db.flush()
-        return InventoryResponse(status="skipped", category=category)
-
-    await db.execute(delete(InventoryLocalUser).where(InventoryLocalUser.endpoint_id == eid))
-    for u in payload.users:
-        db.add(
-            InventoryLocalUser(
-                endpoint_id=eid,
-                username=u.username,
-                is_active=u.is_active,
-                privilege=u.privilege,
-                last_login=u.last_login,
-            )
-        )
-
-    await _upsert_category_state(
-        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
-    )
-    await _write_sync_log(
-        db,
-        eid,
-        category,
-        "success",
-        payload.inventory_hash,
-        payload.agent_version,
-        payload.collected_at,
-        started_at,
-    )
-    await db.flush()
-    return InventoryResponse(status="accepted", category=category)
-
-
-# ---------------------------------------------------------------------------
 # POST /inventory/windows-updates
 # ---------------------------------------------------------------------------
 
@@ -1082,6 +1012,100 @@ async def submit_windows_updates(
                 }
             )
         await db.execute(pg_insert(InventoryWindowsUpdate).values(rows))
+
+    await _upsert_category_state(
+        db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at
+    )
+    await _write_sync_log(
+        db,
+        eid,
+        category,
+        "success",
+        payload.inventory_hash,
+        payload.agent_version,
+        payload.collected_at,
+        started_at,
+    )
+    await db.flush()
+    return InventoryResponse(status="accepted", category=category)
+
+
+# ---------------------------------------------------------------------------
+# POST /inventory/local-users
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/inventory/local-users",
+    response_model=InventoryResponse,
+    summary="Submit local users inventory",
+)
+async def submit_local_users(
+    request: Request,
+    payload: LocalUsersInventoryRequest,
+    current_agent: Annotated[Endpoint, Depends(get_current_agent)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InventoryResponse:
+    if (
+        request.headers.get("content-length")
+        and int(request.headers["content-length"]) > MAX_PAYLOAD_BYTES
+    ):
+        raise HTTPException(status_code=413, detail="Payload Too Large")
+
+    started_at = datetime.now(UTC)
+    category = "local-users"
+    eid = current_agent.id
+
+    existing = await _check_hash(db, eid, category, payload.inventory_hash, payload.collected_at)
+    if existing:
+        await _write_sync_log(
+            db,
+            eid,
+            category,
+            "skipped",
+            payload.inventory_hash,
+            payload.agent_version,
+            payload.collected_at,
+            started_at,
+        )
+        await db.flush()
+        return InventoryResponse(status="skipped", category=category)
+
+    await db.execute(delete(InventoryLocalUser).where(InventoryLocalUser.endpoint_id == eid))
+
+    if payload.users:
+        rows = [
+            {
+                "endpoint_id": eid,
+                "sid": u.sid,
+                "username": u.username,
+                "full_name": u.full_name,
+                "description": u.description,
+                "account_type": u.account_type,
+                "is_enabled": u.is_enabled,
+                "is_locked": u.is_locked,
+                "is_password_required": u.is_password_required,
+                "is_password_change_allowed": u.is_password_change_allowed,
+                "password_expires": u.password_expires,
+                "password_never_expires": u.password_never_expires,
+                "password_last_set": u.password_last_set,
+                "last_logon": u.last_logon,
+                "last_logoff": u.last_logoff,
+                "account_created": u.account_created,
+                "account_expires": u.account_expires,
+                "bad_logon_count": u.bad_logon_count,
+                "home_directory": u.home_directory,
+                "profile_path": u.profile_path,
+                "script_path": u.script_path,
+                "primary_group": u.primary_group,
+                "local_groups": u.local_groups,
+                "is_builtin_account": u.is_builtin_account,
+                "is_administrator": u.is_administrator,
+                "is_guest": u.is_guest,
+            }
+            for u in payload.users
+        ]
+        await db.execute(pg_insert(InventoryLocalUser).values(rows))
 
     await _upsert_category_state(
         db, eid, category, payload.inventory_hash, payload.agent_version, payload.collected_at

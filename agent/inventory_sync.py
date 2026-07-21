@@ -586,3 +586,45 @@ def sync_services() -> None:
 
     upload_duration_ms = int((time.monotonic() - t1) * 1000)
     log.info("Services inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
+
+
+def sync_local_users() -> None:
+    """
+    Orchestrates the entire Local Users inventory sync cycle.
+
+    Workflow:
+      1. Collect local users (via Get-LocalUser / Win32_UserAccount + ADSI)
+      2. Construct ``LocalUsersInventoryRequest`` (hashing occurs in collector)
+      3. Upload payload via API
+    """
+    log = logger.bind(component="sync", category="local-users")
+    log.info("Local users inventory sync cycle started")
+
+    t0 = time.monotonic()
+
+    # 1. Collection & Hashing
+    from collectors.local_users import collect_local_users
+
+    inventory_request = collect_local_users()
+
+    collection_duration_ms = int((time.monotonic() - t0) * 1000)
+
+    log.info(
+        "Local users inventory collection completed",
+        duration_ms=collection_duration_ms,
+        user_count=len(inventory_request.users),
+        inventory_hash=inventory_request.inventory_hash,
+    )
+
+    # 2. Upload
+    log.info(
+        "Local users inventory upload started", inventory_hash=inventory_request.inventory_hash
+    )
+    t1 = time.monotonic()
+
+    from api.inventory import submit_local_users
+
+    submit_local_users(inventory_request)
+
+    upload_duration_ms = int((time.monotonic() - t1) * 1000)
+    log.info("Local users inventory sync cycle finished", upload_duration_ms=upload_duration_ms)
