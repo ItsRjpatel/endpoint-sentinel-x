@@ -36,3 +36,6 @@ class Endpoint(BaseEntity):
 
     # Relationships
     organization: Mapped["Organization"] = relationship("Organization")
+    commands: Mapped[list["Command"]] = relationship(
+        "Command", back_populates="endpoint", cascade="all, delete-orphan"
+    )

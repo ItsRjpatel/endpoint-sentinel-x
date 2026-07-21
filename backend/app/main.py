@@ -9,23 +9,38 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.exceptions import SentinelException
 from app.core.logging import setup_logging
+from app.db.session import AsyncSessionLocal
+from app.api.v1.ws.manager import ws_manager
+from app.services.dispatcher import CommandDispatcher
 
 # Initialize logging configuration
 setup_logging()
 logger = structlog.get_logger()
+
+# Instantiate the globally shared Dispatcher here so it holds the injected dependencies
+# In a pure production setup with multiple workers, this could be conditional or use Redis queues.
+dispatcher = CommandDispatcher(
+    db_session_factory=AsyncSessionLocal,
+    connection_manager=ws_manager,
+    command_timeout_seconds=settings.COMMAND_TIMEOUT_SECONDS
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handles FastAPI backend startup and shutdown lifecycles."""
     logger.info("Initializing Endpoint Sentinel X Core Services...")
+    dispatcher.start()
+    
     yield
+    
     logger.info("Shutting down Endpoint Sentinel X Core Services...")
+    dispatcher.stop()
 
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    version="0.1.0",
+    version="0.6.1",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
 )

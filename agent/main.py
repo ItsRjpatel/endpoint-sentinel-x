@@ -3,6 +3,19 @@ import sys
 
 import structlog
 
+from communication.websocket_client import WebSocketClient
+from inventory_sync import (
+    sync_hardware,
+    sync_os,
+    sync_security,
+    sync_network,
+    sync_storage,
+    sync_software,
+    sync_windows_updates,
+    sync_services,
+    sync_local_users,
+)
+
 # Set up logging for agent
 logging_processors = [
     structlog.processors.TimeStamper(fmt="iso"),
@@ -14,17 +27,58 @@ structlog.configure(processors=logging_processors)
 logger = structlog.get_logger()
 
 
+async def scheduled_inventory_loop():
+    """Periodically triggers REST inventory syncs."""
+    logger.info("Starting scheduled REST inventory sync loop")
+    
+    # Run an initial full sync
+    sync_list = [
+        sync_hardware,
+        sync_os,
+        sync_security,
+        sync_network,
+        sync_storage,
+        sync_software,
+        sync_windows_updates,
+        sync_services,
+        sync_local_users,
+    ]
+    
+    while True:
+        try:
+            logger.info("Executing scheduled inventory sync batch")
+            for sync_func in sync_list:
+                # Run sync functions in thread pool since they are currently blocking
+                await asyncio.to_thread(sync_func)
+                await asyncio.sleep(2)  # Stagger to avoid bursting API
+                
+            logger.info("Inventory sync batch completed. Sleeping until next schedule.")
+            # Sleep for an hour before next full sync (example schedule)
+            await asyncio.sleep(3600)
+            
+        except asyncio.CancelledError:
+            logger.info("Inventory sync loop cancelled.")
+            break
+        except Exception as e:
+            logger.error("Error in scheduled inventory loop", error=str(e))
+            await asyncio.sleep(60)
+
+
 async def main() -> None:
-    logger.info("Initializing Endpoint Sentinel X Agent...")
+    logger.info("Initializing Endpoint Sentinel X Agent Sprint 4...")
     logger.info("Operating System Platform detected", platform=sys.platform)
 
-    # Placeholder for configuration and websocket loops
+    ws_client = WebSocketClient()
+    
     try:
-        while True:
-            logger.debug("Agent heartbeat: telemetry collectors active.")
-            await asyncio.sleep(10)
+        # Run WebSocket client and scheduled inventory concurrently
+        await asyncio.gather(
+            ws_client.start(),
+            scheduled_inventory_loop()
+        )
     except asyncio.CancelledError:
         logger.info("Shutting down agent gracefully...")
+        ws_client.stop()
     except Exception as e:
         logger.error("Unexpected error in agent core event loop", error=str(e))
         sys.exit(1)
