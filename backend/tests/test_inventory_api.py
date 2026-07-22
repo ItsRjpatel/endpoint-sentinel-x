@@ -44,7 +44,7 @@ async def db_session() -> AsyncSession:
 
 
 @pytest.fixture(autouse=True)
-async def override_db(db_session: AsyncSession):
+def override_db(db_session: AsyncSession):
     app.dependency_overrides[get_db] = lambda: db_session
     yield
     app.dependency_overrides.pop(get_db, None)
@@ -334,7 +334,7 @@ async def test_network_normalized_addresses(
     assert "ipv6" in families
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_submit_windows_updates(
     client: AsyncClient, enrolled_agent: tuple[Endpoint, str], db_session: AsyncSession
 ):

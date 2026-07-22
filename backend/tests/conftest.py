@@ -42,10 +42,10 @@ async def client() -> AsyncGenerator[AsyncClient]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def cleanup_db():
+def cleanup_db():
     """Session-scoped fixture to dispose the test engine when all tests complete."""
     yield
-    await test_engine.dispose()
+    asyncio.run(test_engine.dispose())
 
 
 
