@@ -23,7 +23,7 @@ class MockConnectionManager(IConnectionManager):
         return False
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_dispatcher_timeout(db_session):
     """Verify timeout processing transitions SENT commands to TIMEOUT if threshold passed."""
 
