@@ -2,7 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, WebSocket, WebSocketException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,6 +59,29 @@ async def get_current_active_user(
             detail="User is disabled",
         )
     return current_user
+
+
+async def get_current_dashboard_user_ws(
+    websocket: WebSocket,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    """Authenticates browser dashboard WebSockets using a negotiated bearer subprotocol."""
+    protocols = [protocol.strip() for protocol in websocket.headers.get("sec-websocket-protocol", "").split(",")]
+    if len(protocols) != 2 or protocols[0] != "bearer" or not protocols[1]:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Missing bearer token")
+
+    try:
+        payload = jwt.decode(protocols[1], settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        user_uuid = UUID(payload["sub"])
+        if payload.get("type") != "access":
+            raise ValueError("Token is not an access token")
+    except (jwt.InvalidTokenError, KeyError, ValueError):
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid bearer token") from None
+
+    user = await UserRepository(db).get_by_uuid(user_uuid)
+    if user is None or not user.is_active:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Inactive user")
+    return user
 
 
 class RoleChecker:

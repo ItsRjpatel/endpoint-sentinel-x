@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/v1";
 
 type FetchOptions = RequestInit & {
   // custom options can go here
@@ -13,9 +13,11 @@ class ApiClient {
 
   private async request<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
     const { headers: customHeaders, ...restOptions } = options;
-    
+
     const headers = new Headers(customHeaders);
-    headers.set("Content-Type", "application/json");
+    if (!headers.has("Content-Type") && !(restOptions.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
 
     if (this.tokenProvider) {
       const token = this.tokenProvider();
@@ -48,18 +50,28 @@ class ApiClient {
   }
 
   post<T>(endpoint: string, body: unknown, options?: FetchOptions) {
+    const serializedBody =
+      body instanceof FormData || body instanceof URLSearchParams || typeof body === "string"
+        ? body
+        : JSON.stringify(body);
+
     return this.request<T>(endpoint, {
       ...options,
       method: "POST",
-      body: JSON.stringify(body),
+      body: serializedBody,
     });
   }
 
   put<T>(endpoint: string, body: unknown, options?: FetchOptions) {
+    const serializedBody =
+      body instanceof FormData || body instanceof URLSearchParams || typeof body === "string"
+        ? body
+        : JSON.stringify(body);
+
     return this.request<T>(endpoint, {
       ...options,
       method: "PUT",
-      body: JSON.stringify(body),
+      body: serializedBody,
     });
   }
 

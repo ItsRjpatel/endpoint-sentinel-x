@@ -121,18 +121,23 @@ def collect_windows_updates() -> WindowsUpdatesInventoryRequest:
         title = str(item.get("title") or "").strip()
         desc = str(item.get("description") or "").strip()
         installed_on = item.get("installed_on")
-        if installed_on and not isinstance(installed_on, str):
-            # Sometimes WMI returns a date string, sometimes WMI date. If it's a string, we parse.
-            pass
-
-        # Format WMI date if needed
-        if installed_on and source == "WMI" and "T" not in str(installed_on):
-            try:
-                # Basic string to ISO if it looks like MM/DD/YYYY
-                dt = datetime.strptime(str(installed_on).split(" ")[0], "%m/%d/%Y")
-                installed_on = dt.isoformat()
-            except Exception:
-                pass
+        parsed_date = None
+        if installed_on:
+            if isinstance(installed_on, dict):
+                installed_on = installed_on.get("value", "")
+            installed_on = str(installed_on).strip()
+            
+            if installed_on and not installed_on.startswith("/Date("):
+                try:
+                    if "T" in installed_on:
+                        parsed_date = installed_on
+                    else:
+                        dt = datetime.strptime(installed_on.split(" ")[0], "%m/%d/%Y")
+                        parsed_date = dt.isoformat()
+                except Exception:
+                    parsed_date = None
+                    
+        installed_on = parsed_date
 
         hotfix_id = str(item.get("hotfix_id") or "").strip().upper()
         extracted_kb = _extract_kb(title, hotfix_id)

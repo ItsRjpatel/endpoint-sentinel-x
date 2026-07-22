@@ -50,9 +50,9 @@ class SecurityService:
 
         unprotected = total_endpoints - protected
 
-        # Pending updates
+        # Pending updates: count rows whose installation state indicates they are not installed.
         updates_stmt = select(func.count(InventoryWindowsUpdate.id)).where(
-            not InventoryWindowsUpdate.is_installed
+            InventoryWindowsUpdate.installation_state.in_(["NotInstalled", "Pending", "Unknown"])
         )
         pending_updates = (await self.db.execute(updates_stmt)).scalar_one()
 
@@ -135,7 +135,7 @@ class SecurityService:
         updates_score = 10.0
         upd_stmt = select(func.count(InventoryWindowsUpdate.id)).where(
             InventoryWindowsUpdate.endpoint_id == endpoint_id,
-            not InventoryWindowsUpdate.is_installed
+            InventoryWindowsUpdate.installation_state.in_(["NotInstalled", "Pending", "Unknown"]),
         )
         pending_updates = (await self.db.execute(upd_stmt)).scalar_one()
         if pending_updates > 5:

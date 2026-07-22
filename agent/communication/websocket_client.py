@@ -23,11 +23,11 @@ class WebSocketClient:
 
     def __init__(self):
         # Convert HTTP URL to WS URL
-        base_url = agent_settings.backend_url.replace("http://", "ws://").replace("https://", "wss://")
+        base_url = agent_settings.api_base_url.replace("http://", "ws://").replace("https://", "wss://")
         self.uri = f"{base_url}/api/v1/ws"
         self.headers = {
             "X-Agent-ID": str(agent_settings.agent_id),
-            "X-Agent-Secret": agent_settings.agent_secret.get_secret_value(),
+            "X-Agent-Secret": agent_settings.agent_secret,
             "X-Agent-Version": agent_settings.agent_version,
         }
         self.connection = None
@@ -42,7 +42,7 @@ class WebSocketClient:
         
         while self._running:
             try:
-                async with websockets.connect(self.uri, extra_headers=self.headers) as websocket:
+                async with websockets.connect(self.uri, additional_headers=self.headers) as websocket:
                     self.connection = websocket
                     self._reconnect_delay = 1.0  # Reset delay on successful connect
                     logger.info("WebSocket connected successfully")
@@ -77,7 +77,7 @@ class WebSocketClient:
 
     async def send_envelope(self, event: WSEventType, payload: dict):
         """Sends a structured envelope to the backend."""
-        if not self.connection or self.connection.closed:
+        if not self.connection:
             logger.error("Cannot send message, WebSocket is not connected")
             return
 
@@ -92,7 +92,7 @@ class WebSocketClient:
 
     async def _heartbeat_loop(self):
         """Periodically sends PING to the backend."""
-        while self._running and self.connection and not self.connection.closed:
+        while self._running and self.connection:
             try:
                 await self.send_envelope(WSEventType.PING, {})
                 await asyncio.sleep(30)

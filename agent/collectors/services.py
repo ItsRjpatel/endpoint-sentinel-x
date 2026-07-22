@@ -103,7 +103,10 @@ def collect_services() -> ServicesInventoryRequest:
     log = logger.bind(component="collector", category="services")
     log.info("Starting windows services collection")
 
-    raw_output = run_powershell(_PS_SCRIPT).strip()
+    raw_output = run_powershell(_PS_SCRIPT, timeout=30)
+    if raw_output is None:
+        raw_output = ""
+    raw_output = raw_output.strip()
 
     if not raw_output:
         log.warning("No output from PowerShell script")

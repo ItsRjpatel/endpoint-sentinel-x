@@ -28,6 +28,9 @@ class AgentHeartbeatRequest(BaseModel):
     status: str = Field("healthy", description="General status of the agent process")
     cpu_pct: float = Field(..., ge=0.0, le=100.0, description="CPU usage percent")
     ram_pct: float = Field(..., ge=0.0, le=100.0, description="RAM usage percent")
+    disk_pct: float = Field(default=0.0, ge=0.0, le=100.0, description="Disk usage percent")
+    network_in: int = Field(default=0, ge=0, description="Network bytes in")
+    network_out: int = Field(default=0, ge=0, description="Network bytes out")
 
 
 class AgentHeartbeatResponse(BaseModel):

@@ -1,10 +1,11 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
 import { RequireAuth } from './components/auth/RequireAuth';
 import { useAuth } from './contexts/AuthContext';
 import { Shield } from 'lucide-react';
 import { Skeleton } from './components/ui/Skeleton';
+import { apiClient } from './api/client';
 
 const Dashboard = lazy(() => import('./features/dashboard/Dashboard'));
 const EndpointInventory = lazy(() => import('./features/endpoints/components/EndpointInventory'));
@@ -29,10 +30,34 @@ const PlaceholderView: React.FC<{ name: string }> = ({ name }) => (
 // Temporary Login View
 const LoginView: React.FC = () => {
   const { login, isAuthenticated } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
+
+  const handleLogin = async () => {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.post<{ access_token: string; refresh_token: string; token_type: string }>(
+        '/auth/login',
+        'username=admin&password=admin123',
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+      login(response.access_token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -45,11 +70,13 @@ const LoginView: React.FC = () => {
           <p className="text-xs text-text-muted">Enterprise Access Portal</p>
         </div>
         <button
-          onClick={() => login("dev-token-123")}
-          className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+          onClick={handleLogin}
+          disabled={isSubmitting}
+          className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
         >
-          Developer Login (Sprint 5.1)
+          {isSubmitting ? 'Signing in…' : 'Sign in as Admin'}
         </button>
+        {error ? <p className="text-sm text-red-500">{error}</p> : null}
       </div>
     </div>
   );

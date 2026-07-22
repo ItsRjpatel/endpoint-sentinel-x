@@ -1,11 +1,8 @@
 import { EndpointRepository } from './EndpointRepository';
-import { EndpointMockRepository } from './EndpointMockRepository';
+import { EndpointApiRepository } from './EndpointApiRepository';
 import { EndpointDetailsRepository } from './EndpointDetailsRepository';
-import { EndpointDetailsMockRepository } from './EndpointDetailsMockRepository';
+import { EndpointDetailsApiRepository } from './EndpointDetailsApiRepository';
 
-// For Sprint 5.3, we use the Mock Repository.
-export const endpointRepository: EndpointRepository = new EndpointMockRepository();
-
-// For Sprint 5.4, we use the Mock Repository.
-export const endpointDetailsRepository: EndpointDetailsRepository = new EndpointDetailsMockRepository();
+export const endpointRepository: EndpointRepository = new EndpointApiRepository();
+export const endpointDetailsRepository: EndpointDetailsRepository = new EndpointDetailsApiRepository();
 

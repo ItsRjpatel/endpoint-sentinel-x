@@ -7,10 +7,11 @@ from pydantic import ValidationError
 from shared.constants.ws_events import WSEventType
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints import agent, auth, commands, health, inventory, security, policies
+from app.api.v1.endpoints import agent, auth, commands, health, inventory, security, policies, dashboard, endpoints
 from app.api.v1.ws.manager import ws_manager
 from app.db.models.endpoint import Endpoint
 from app.dependencies.agent import get_current_agent_ws
+from app.dependencies.auth import get_current_dashboard_user_ws
 from app.dependencies.database import get_db
 from app.schemas.ws import WSEnvelope
 from app.services.command import CommandService
@@ -26,6 +27,26 @@ api_router.include_router(inventory.router, tags=["Inventory"])
 api_router.include_router(commands.router, prefix="/commands", tags=["Commands"])
 api_router.include_router(security.router, prefix="/security", tags=["Security"])
 api_router.include_router(policies.router, tags=["Policies"])
+api_router.include_router(dashboard.router, tags=["Dashboard"])
+api_router.include_router(endpoints.router, tags=["Endpoints"])
+
+
+@api_router.websocket("/ws/dashboard")
+async def dashboard_websocket_endpoint(
+    websocket: WebSocket,
+    current_user=Depends(get_current_dashboard_user_ws),
+):
+    """Authenticated browser channel for live dashboard events."""
+    await websocket.accept(subprotocol="bearer")
+    ws_manager.register_dashboard(websocket)
+    await websocket.send_json({"event": "AUTH_OK", "payload": {"user_id": str(current_user.uuid)}})
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        ws_manager.unregister_dashboard(websocket)
 
 
 @api_router.websocket("/ws")

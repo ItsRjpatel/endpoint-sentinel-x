@@ -212,7 +212,7 @@ def submit_windows_updates(payload: "WindowsUpdatesInventoryRequest") -> None:
     )
     # The BaseModel `.model_dump()` handles converting nested models, enums,
     # and date/time objects into JSON-safe dictionaries exactly as FastAPI expects.
-    payload_dict = payload.model_dump()
+    payload_dict = payload.model_dump(mode="json")
     _submit_inventory(
         body=payload_dict,
         endpoint_path="/api/v1/inventory/windows-updates",
@@ -231,7 +231,7 @@ def submit_services(payload: "ServicesInventoryRequest") -> None:
         inventory_hash=payload.inventory_hash,
         service_count=len(payload.services),
     )
-    payload_dict = payload.model_dump()
+    payload_dict = payload.model_dump(mode="json")
     _submit_inventory(
         body=payload_dict,
         endpoint_path="/api/v1/inventory/services",
@@ -273,7 +273,7 @@ def submit_os(body: dict, config: AgentConfig | None = None) -> None:
     """
     _submit_inventory(
         body=body,
-        endpoint_path="/api/v1/inventory/operating-system",
+        endpoint_path="/api/v1/inventory/os",
         category_name="OS",
         config=config,
     )

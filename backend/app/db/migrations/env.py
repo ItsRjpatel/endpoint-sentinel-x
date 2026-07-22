@@ -40,6 +40,8 @@ from app.db.models.policy import Policy  # noqa: F401
 from app.db.models.policy_version import PolicyVersion  # noqa: F401
 from app.db.models.policy_assignment import PolicyAssignment  # noqa: F401
 
+from app.db.models.performance_history import PerformanceHistory  # noqa: F401
+
 # this is the Alembic Config object, which provides access to the values
 # within the .ini file in use.
 config = context.config

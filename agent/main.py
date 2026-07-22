@@ -13,8 +13,11 @@ from inventory_sync import (
     sync_software,
     sync_windows_updates,
     sync_services,
+    sync_services,
     sync_local_users,
 )
+from collectors.performance import collect as collect_performance
+from api.heartbeat import submit_heartbeat
 
 # Set up logging for agent
 logging_processors = [
@@ -64,6 +67,30 @@ async def scheduled_inventory_loop():
             await asyncio.sleep(60)
 
 
+async def scheduled_heartbeat_loop():
+    """Periodically sends REST heartbeats with live performance data."""
+    logger.info("Starting scheduled heartbeat loop")
+    while True:
+        try:
+            perf = await asyncio.to_thread(collect_performance)
+            await asyncio.to_thread(
+                submit_heartbeat, 
+                status="healthy",
+                cpu=perf.cpu_usage_percent,
+                ram=perf.memory_usage_percent,
+                disk=perf.disk_usage_percent,
+                net_in=perf.network_in_bytes,
+                net_out=perf.network_out_bytes
+            )
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            logger.info("Heartbeat loop cancelled.")
+            break
+        except Exception as e:
+            logger.error("Error in scheduled heartbeat loop", error=str(e))
+            await asyncio.sleep(30)
+
+
 async def main() -> None:
     logger.info("Initializing Endpoint Sentinel X Agent Sprint 4...")
     logger.info("Operating System Platform detected", platform=sys.platform)
@@ -74,7 +101,8 @@ async def main() -> None:
         # Run WebSocket client and scheduled inventory concurrently
         await asyncio.gather(
             ws_client.start(),
-            scheduled_inventory_loop()
+            scheduled_inventory_loop(),
+            scheduled_heartbeat_loop()
         )
     except asyncio.CancelledError:
         logger.info("Shutting down agent gracefully...")

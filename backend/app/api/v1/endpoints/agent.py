@@ -12,6 +12,7 @@ from app.db.models.endpoint import Endpoint
 from app.db.models.enrollment_token import EnrollmentToken
 from app.dependencies.agent import get_current_agent
 from app.dependencies.database import get_db
+from app.db.models.performance_history import PerformanceHistory
 from app.schemas.agent import (
     AgentConfigResponse,
     AgentHeartbeatRequest,
@@ -20,6 +21,7 @@ from app.schemas.agent import (
     AgentRegisterResponse,
     AgentRotateSecretResponse,
 )
+from app.api.v1.ws.manager import ws_manager
 
 router = APIRouter()
 
@@ -110,8 +112,30 @@ async def agent_heartbeat(
     if current_agent.lifecycle_state in ("REGISTERED", "OFFLINE"):
         current_agent.lifecycle_state = "ONLINE"
 
+    perf = PerformanceHistory(
+        endpoint_id=current_agent.id,
+        timestamp=current_agent.last_seen,
+        cpu_usage_percent=payload.cpu_pct,
+        memory_usage_percent=payload.ram_pct,
+        disk_usage_percent=payload.disk_pct,
+        network_in_bytes=payload.network_in,
+        network_out_bytes=payload.network_out
+    )
+    db.add(perf)
     db.add(current_agent)
     await db.flush()
+
+    await ws_manager.broadcast_dashboard({
+        "event": "performance_update",
+        "payload": {
+            "time": current_agent.last_seen.isoformat(),
+            "cpu": payload.cpu_pct,
+            "memory": payload.ram_pct,
+            "disk": payload.disk_pct,
+            "networkIn": payload.network_in // 1024,
+            "networkOut": payload.network_out // 1024,
+        },
+    })
 
     return AgentHeartbeatResponse(
         status="success",

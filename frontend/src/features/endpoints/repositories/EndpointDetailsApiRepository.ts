@@ -1,19 +1,13 @@
 import { EndpointDetails } from '../types';
 import { EndpointDetailsRepository } from './EndpointDetailsRepository';
+import { apiClient } from '../../../api/client';
 
 export class EndpointDetailsApiRepository implements EndpointDetailsRepository {
   async getEndpointDetails(id: string): Promise<EndpointDetails> {
-    const response = await fetch(`/api/endpoints/${id}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch endpoint details for ${id}`);
-    }
-    return response.json();
+    return apiClient.get<EndpointDetails>(`/endpoints/${id}`);
   }
 
   async refreshEndpoint(id: string): Promise<void> {
-    const response = await fetch(`/api/endpoints/${id}/refresh`, { method: 'POST' });
-    if (!response.ok) {
-      throw new Error(`Failed to refresh endpoint ${id}`);
-    }
+    await apiClient.post(`/endpoints/${id}/refresh`, {});
   }
 }

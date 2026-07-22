@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient
@@ -20,7 +20,7 @@ async def test_policies_list_unauthorized(client: AsyncClient) -> None:
 async def test_policies_list_authorized(client: AsyncClient) -> None:
     """Verifies that the /policies API returns 200 for authenticated users."""
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = []
     mock_db.execute.return_value = mock_result
     mock_user = User(id=1, organization_id=1, username="testadmin", role="ORGANIZATION_ADMIN", is_active=True)

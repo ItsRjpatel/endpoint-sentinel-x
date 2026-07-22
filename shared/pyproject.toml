@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "endpoint-sentinel-shared"
+version = "0.1.0"
+description = "Shared protocol contracts for Endpoint Sentinel X"
+requires-python = ">=3.13"
+
+[tool.setuptools]
+packages = ["shared", "shared.constants"]
+
+[tool.setuptools.package-dir]
+shared = "."

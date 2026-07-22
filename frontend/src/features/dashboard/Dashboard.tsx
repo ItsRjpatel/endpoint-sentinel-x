@@ -6,6 +6,7 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { Card, CardContent } from '../../components/ui/Card';
 
 const FleetPulse = React.lazy(() => import('./components/FleetPulse'));
+const FleetHealth = React.lazy(() => import('./components/FleetHealth'));
 const ActivityFeed = React.lazy(() => import('./components/ActivityFeed'));
 const SecurityPanel = React.lazy(() => import('./components/SecurityPanel'));
 const RecentAlerts = React.lazy(() => import('./components/RecentAlerts'));
@@ -39,6 +40,12 @@ export function Dashboard() {
           <WidgetErrorBoundary title="Fleet Pulse">
             <Suspense fallback={<WidgetFallback />}>
               <FleetPulse />
+            </Suspense>
+          </WidgetErrorBoundary>
+
+          <WidgetErrorBoundary title="Fleet Health & Performance">
+            <Suspense fallback={<WidgetFallback />}>
+              <FleetHealth />
             </Suspense>
           </WidgetErrorBoundary>
 

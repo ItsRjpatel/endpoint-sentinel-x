@@ -13,7 +13,7 @@ interface WebSocketContextType {
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
-const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/api/v1/ws";
+const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/api/v1/ws/dashboard";
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, token } = useAuth();
@@ -56,18 +56,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const connect = () => {
       setStatus("connecting");
       
-      const ws = new WebSocket(WS_URL);
+      const ws = new WebSocket(WS_URL, ["bearer", token]);
       
       ws.onopen = () => {
         if (!isSubscribed) return;
-        setStatus("connected");
-        ws.send(JSON.stringify({
-          schema_version: "1.0",
-          event: "AUTH",
-          request_id: crypto.randomUUID(),
-          timestamp: new Date().toISOString(),
-          payload: { token }
-        }));
       };
 
       ws.onmessage = (event) => {
@@ -77,12 +69,15 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           
           // Dispatch to subscribers
           const eventType = data.event;
+          if (eventType === "AUTH_OK") {
+            setStatus("connected");
+          }
           if (eventType && subscribersRef.current.has(eventType)) {
-            subscribersRef.current.get(eventType)!.forEach(cb => cb(data));
+            subscribersRef.current.get(eventType)!.forEach(cb => cb(data.payload ?? data));
           }
           // Also dispatch to a catch-all listener if needed
           if (subscribersRef.current.has("*")) {
-            subscribersRef.current.get("*")!.forEach(cb => cb(data));
+            subscribersRef.current.get("*")!.forEach(cb => cb(data.payload ?? data));
           }
         } catch (e) {
           console.error("Failed to parse WS message", e);

@@ -32,6 +32,7 @@ class ConnectionManager:
         # Maps endpoint_id -> ConnectionState
         # Note: In a scaled environment, this would coordinate with Redis.
         self.active_connections: dict[str, ConnectionState] = {}
+        self.dashboard_connections: set[WebSocket] = set()
 
     def register(self, endpoint_id: str, websocket: WebSocket, agent_version: str = "unknown") -> None:
         """Registers a newly authenticated WebSocket connection."""
@@ -51,6 +52,12 @@ class ConnectionManager:
         if endpoint_id in self.active_connections:
             del self.active_connections[endpoint_id]
             logger.info("Agent disconnected", endpoint_id=endpoint_id)
+
+    def register_dashboard(self, websocket: WebSocket) -> None:
+        self.dashboard_connections.add(websocket)
+
+    def unregister_dashboard(self, websocket: WebSocket) -> None:
+        self.dashboard_connections.discard(websocket)
 
     def get_connection(self, endpoint_id: str) -> ConnectionState | None:
         return self.active_connections.get(endpoint_id)
@@ -86,6 +93,15 @@ class ConnectionManager:
                     error=str(e),
                 )
                 self.unregister(endpoint_id)
+
+    async def broadcast_dashboard(self, message: dict) -> None:
+        """Broadcast telemetry only to authenticated dashboard browser sessions."""
+        for websocket in list(self.dashboard_connections):
+            try:
+                await websocket.send_json(message)
+            except Exception as e:
+                logger.error("Failed to broadcast to dashboard", error=str(e))
+                self.unregister_dashboard(websocket)
 
     def heartbeat(self, endpoint_id: str, latency_ms: int = 0) -> None:
         state = self.get_connection(endpoint_id)
