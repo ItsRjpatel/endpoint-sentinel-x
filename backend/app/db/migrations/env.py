@@ -36,6 +36,9 @@ from app.db.models.organization import Organization  # noqa: F401
 from app.db.models.security_event import SecurityEvent  # noqa: F401
 from app.db.models.security_score_history import SecurityScoreHistory  # noqa: F401
 from app.db.models.user import User  # noqa: F401
+from app.db.models.policy import Policy  # noqa: F401
+from app.db.models.policy_version import PolicyVersion  # noqa: F401
+from app.db.models.policy_assignment import PolicyAssignment  # noqa: F401
 
 # this is the Alembic Config object, which provides access to the values
 # within the .ini file in use.

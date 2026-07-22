@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from shared.constants.ws_events import WSEventType
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints import agent, auth, commands, health, inventory, security
+from app.api.v1.endpoints import agent, auth, commands, health, inventory, security, policies
 from app.api.v1.ws.manager import ws_manager
 from app.db.models.endpoint import Endpoint
 from app.dependencies.agent import get_current_agent_ws
@@ -25,6 +25,7 @@ api_router.include_router(agent.router, prefix="/agent", tags=["Agent"])
 api_router.include_router(inventory.router, tags=["Inventory"])
 api_router.include_router(commands.router, prefix="/commands", tags=["Commands"])
 api_router.include_router(security.router, prefix="/security", tags=["Security"])
+api_router.include_router(policies.router, tags=["Policies"])
 
 
 @api_router.websocket("/ws")

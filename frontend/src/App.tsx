@@ -11,7 +11,7 @@ const EndpointInventory = lazy(() => import('./features/endpoints/components/End
 const EndpointDetailsRoute = lazy(() => import('./features/endpoints/components/details/EndpointDetailsRoute'));
 
 const SecurityDashboard = lazy(() => import('./features/security/SecurityDashboard'));
-
+const PoliciesDashboard = lazy(() => import('./features/policies/PoliciesDashboard'));
 // Temporary placeholder for features to be implemented in Sprint 5.2
 const PlaceholderView: React.FC<{ name: string }> = ({ name }) => (
   <div className="space-y-6">
@@ -85,6 +85,11 @@ export const App: React.FC = () => {
           </Suspense>
         } />
         <Route path="monitoring" element={<PlaceholderView name="Real-time Metrics Monitoring" />} />
+        <Route path="policies" element={
+          <Suspense fallback={<div className="p-6 min-h-screen bg-surface-primary flex items-center justify-center"><Skeleton className="h-[400px] w-full max-w-4xl" /></div>}>
+            <PoliciesDashboard />
+          </Suspense>
+        } />
         <Route path="alerts" element={<PlaceholderView name="System Trigger Alerts" />} />
         <Route path="compliance" element={<PlaceholderView name="CIS Baseline Compliance" />} />
         <Route path="audit" element={<PlaceholderView name="Security Audit Trails" />} />

@@ -11,12 +11,14 @@ import {
   Settings as SettingsIcon,
   Activity,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  BookOpen
 } from "lucide-react";
 
 const menuItems = [
   { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { name: "Endpoints", path: "/endpoints", icon: Monitor },
+  { name: "Policies", path: "/policies", icon: BookOpen },
   { name: "Monitoring", path: "/monitoring", icon: Activity },
   { name: "Alerts", path: "/alerts", icon: Bell },
   { name: "Security", path: "/security", icon: Shield },
