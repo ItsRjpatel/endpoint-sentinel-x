@@ -1,12 +1,12 @@
 import uuid
-from typing import Sequence
-from datetime import datetime, UTC
+from collections.abc import Sequence
+from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from shared.constants.ws_events import CommandStatus
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.command import Command
-from shared.constants.ws_events import CommandStatus
 
 
 class CommandRepository:
@@ -43,12 +43,12 @@ class CommandRepository:
         )
         result = await self.db.execute(stmt)
         commands = result.scalars().all()
-        
+
         now = datetime.now(UTC)
         for cmd in commands:
             cmd.status = CommandStatus.QUEUED
             cmd.queued_at = now
-            
+
         await self.db.flush()
         return commands
 
@@ -58,7 +58,7 @@ class CommandRepository:
             select(Command)
             .where(
                 Command.status.in_([CommandStatus.SENT, CommandStatus.RUNNING]),
-                Command.updated_at < timeout_threshold
+                Command.created_at < timeout_threshold
             )
         )
         result = await self.db.execute(stmt)

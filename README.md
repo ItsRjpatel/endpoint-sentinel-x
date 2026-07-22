@@ -2,6 +2,8 @@
 
 Endpoint Sentinel X (ESX) is a cloud-native, enterprise-grade Endpoint Monitoring & Management Platform designed for scale, maintainability, and security. It is built to monitor and manage 10,000+ endpoints.
 
+**Current Version:** `1.0.0-rc1` (Release Candidate 1) - Sprint 6 MVP Completed
+
 ## Vision
 
 To provide real-time, lightweight, secure, and highly scalable endpoint telemetry collection and centralized policy enforcement. ESX aims to help system administrators and security analysts observe, analyze, and command enterprise endpoints from a single pane of glass.

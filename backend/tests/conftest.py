@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator, Generator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 import app.db.session as db_session_module
@@ -46,3 +46,13 @@ async def cleanup_db():
     """Session-scoped fixture to dispose the test engine when all tests complete."""
     yield
     await test_engine.dispose()
+
+
+
+
+@pytest.fixture
+async def db_session() -> AsyncSession:
+    """Fixture providing a transactional session that rolls back after each test."""
+    async with db_session_module.AsyncSessionLocal() as session:
+        yield session
+        await session.rollback()

@@ -52,12 +52,26 @@ def _parse_ps_date(date_str: Any) -> datetime | None:
 def _get_defender() -> DefenderInventory | None:
     try:
         script = (
-            "Get-MpComputerStatus -ErrorAction SilentlyContinue | "
-            "Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, "
-            "AMProductVersion, AMEngineVersion, AntivirusSignatureLastUpdated, "
-            "QuickScanEndTime, FullScanEndTime, AntispywareEnabled, NISEnabled, "
-            "IoavProtectionEnabled, BehaviorMonitorEnabled, IsTamperProtected | "
-            "ConvertTo-Json -Compress"
+            "$status = Get-MpComputerStatus -ErrorAction SilentlyContinue;"
+            "$pref = Get-MpPreference -ErrorAction SilentlyContinue;"
+            "if (-not $status) { exit };"
+            "@{ "
+            "AMServiceEnabled = $status.AMServiceEnabled;"
+            "AntivirusEnabled = $status.AntivirusEnabled;"
+            "RealTimeProtectionEnabled = $status.RealTimeProtectionEnabled;"
+            "AMProductVersion = $status.AMProductVersion;"
+            "AMEngineVersion = $status.AMEngineVersion;"
+            "AntivirusSignatureLastUpdated = $status.AntivirusSignatureLastUpdated;"
+            "QuickScanEndTime = $status.QuickScanEndTime;"
+            "FullScanEndTime = $status.FullScanEndTime;"
+            "AntispywareEnabled = $status.AntispywareEnabled;"
+            "NISEnabled = $status.NISEnabled;"
+            "IoavProtectionEnabled = $status.IoavProtectionEnabled;"
+            "BehaviorMonitorEnabled = $status.BehaviorMonitorEnabled;"
+            "IsTamperProtected = $status.IsTamperProtected;"
+            "EnableControlledFolderAccess = $pref.EnableControlledFolderAccess;"
+            "DisableCatchupFullScan = $pref.DisableCatchupFullScan "
+            "} | ConvertTo-Json -Compress"
         )
         result = run_powershell(script)
         if not result:
@@ -82,6 +96,9 @@ def _get_defender() -> DefenderInventory | None:
             ioav_protection=bool(data.get("IoavProtectionEnabled")),
             behavior_monitoring=bool(data.get("BehaviorMonitorEnabled")),
             tamper_protection=bool(data.get("IsTamperProtected")),
+            controlled_folder_access=bool(data.get("EnableControlledFolderAccess") == 1),
+            exploit_protection=None,  # Exploit protection requires specific Get-ProcessMitigation
+            boot_protection=None,
         )
     except Exception:
         logger.warning("Failed to collect Defender inventory", exc_info=True)

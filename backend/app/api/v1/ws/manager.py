@@ -1,5 +1,6 @@
+from datetime import UTC, datetime
+
 import structlog
-from datetime import datetime, UTC
 from fastapi import WebSocket
 
 logger = structlog.get_logger()
@@ -37,7 +38,7 @@ class ConnectionManager:
         state = ConnectionState(websocket)
         state.agent_version = agent_version
         self.active_connections[endpoint_id] = state
-        
+
         logger.info(
             "Agent connected via WebSocket",
             endpoint_id=endpoint_id,

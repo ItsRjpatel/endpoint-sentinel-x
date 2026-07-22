@@ -1,18 +1,18 @@
-import structlog
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
+from shared.constants.ws_events import WSEventType
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints import agent, auth, health, inventory, commands
+from app.api.v1.endpoints import agent, auth, commands, health, inventory, security
 from app.api.v1.ws.manager import ws_manager
+from app.db.models.endpoint import Endpoint
 from app.dependencies.agent import get_current_agent_ws
 from app.dependencies.database import get_db
-from app.db.models.endpoint import Endpoint
 from app.schemas.ws import WSEnvelope
-from shared.constants.ws_events import WSEventType
 from app.services.command import CommandService
 
 logger = structlog.get_logger()
@@ -20,10 +20,11 @@ api_router = APIRouter()
 
 # Include REST routes
 api_router.include_router(health.router, tags=["Health"])
-api_router.include_router(auth.router, tags=["Authentication"])
-api_router.include_router(agent.router, tags=["Agent"])
+api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(agent.router, prefix="/agent", tags=["Agent"])
 api_router.include_router(inventory.router, tags=["Inventory"])
-api_router.include_router(commands.router, tags=["Commands"])
+api_router.include_router(commands.router, prefix="/commands", tags=["Commands"])
+api_router.include_router(security.router, prefix="/security", tags=["Security"])
 
 
 @api_router.websocket("/ws")
@@ -37,13 +38,13 @@ async def websocket_endpoint(
     The agent must send X-Agent-ID and X-Agent-Secret headers during the upgrade request.
     """
     endpoint_id_str = str(current_agent.id)
-    
+
     # Extract agent version from headers if available
     agent_version = websocket.headers.get("x-agent-version", "unknown")
-    
+
     await websocket.accept()
     ws_manager.register(endpoint_id_str, websocket, agent_version=agent_version)
-    
+
     # Send AUTH_OK envelope
     await ws_manager.send(endpoint_id_str, WSEnvelope(
         event=WSEventType.AUTH_OK,
@@ -56,7 +57,7 @@ async def websocket_endpoint(
         while True:
             # Await strict envelope structured data
             data = await websocket.receive_json()
-            
+
             try:
                 envelope = WSEnvelope.model_validate(data)
             except ValidationError as ve:
@@ -95,7 +96,7 @@ async def websocket_endpoint(
                     error = payload.get("error")
                     result_json = payload.get("result_json")
                     execution_duration = payload.get("execution_duration")
-                    
+
                     if cmd_id_str and status:
                         await service.update_command_status(
                             command_id=UUID(cmd_id_str),

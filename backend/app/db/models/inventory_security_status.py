@@ -44,6 +44,9 @@ class InventorySecurityStatus(Base, TimestampMixin):
     defender_ioav_protection: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     defender_behavior_monitoring: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     defender_tamper_protection: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    defender_exploit_protection: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    defender_controlled_folder_access: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    defender_boot_protection: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # TPM
     tpm_present: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

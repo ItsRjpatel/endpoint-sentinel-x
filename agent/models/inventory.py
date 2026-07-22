@@ -104,6 +104,9 @@ class DefenderInventory(BaseModel):
     ioav_protection: bool | None = None
     behavior_monitoring: bool | None = None
     tamper_protection: bool | None = None
+    exploit_protection: bool | None = None
+    controlled_folder_access: bool | None = None
+    boot_protection: bool | None = None
 
 
 class TPMInventory(BaseModel):

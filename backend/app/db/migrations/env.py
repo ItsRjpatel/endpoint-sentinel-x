@@ -33,6 +33,8 @@ from app.db.models.inventory_volume import InventoryVolume  # noqa: F401
 from app.db.models.inventory_volume_mount import InventoryVolumeMount  # noqa: F401
 from app.db.models.inventory_windows_update import InventoryWindowsUpdate  # noqa: F401
 from app.db.models.organization import Organization  # noqa: F401
+from app.db.models.security_event import SecurityEvent  # noqa: F401
+from app.db.models.security_score_history import SecurityScoreHistory  # noqa: F401
 from app.db.models.user import User  # noqa: F401
 
 # this is the Alembic Config object, which provides access to the values

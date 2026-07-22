@@ -21,7 +21,7 @@ from app.schemas.user import UserResponse
 router = APIRouter()
 
 
-@router.post("/auth/login", response_model=Token, summary="OAuth2 compatible token login")
+@router.post("/login", response_model=Token, summary="OAuth2 compatible token login")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -54,7 +54,7 @@ async def login_for_access_token(
     )
 
 
-@router.post("/auth/logout", summary="Log out active session")
+@router.post("/logout", summary="Log out active session")
 async def logout(
     current_user: Annotated[User, Depends(get_current_active_user)],
 ):
@@ -62,7 +62,7 @@ async def logout(
     return {"detail": "Logged out successfully"}
 
 
-@router.post("/auth/refresh", response_model=Token, summary="Refresh JWT access token")
+@router.post("/refresh", response_model=Token, summary="Refresh JWT access token")
 async def refresh_access_token(
     refresh_token: Annotated[str, Body(..., embed=True)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -113,7 +113,7 @@ async def refresh_access_token(
     )
 
 
-@router.get("/auth/me", response_model=UserResponse, summary="Get current user details")
+@router.get("/me", response_model=UserResponse, summary="Get current user details")
 async def read_users_me(
     current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> UserResponse:

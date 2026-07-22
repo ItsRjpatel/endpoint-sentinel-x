@@ -1,7 +1,7 @@
 import uuid
-from typing import Sequence
-import structlog
+from collections.abc import Sequence
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 

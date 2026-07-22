@@ -4,35 +4,51 @@
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: #ffffff;
+    --surface: #f8fafc;
+    --surface-secondary: #f1f5f9;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --border-soft: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+    --accent: #eff6ff;
+    --accent-foreground: #1d4ed8;
+    
+    --success: #10b981;
+    --success-foreground: #ffffff;
+    --warning: #f59e0b;
+    --warning-foreground: #ffffff;
+    --danger: #ef4444;
+    --danger-foreground: #ffffff;
+  }
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-
-    --radius: 0.5rem;
+  .dark {
+    --background: #0A0D12;
+    --surface: #12161D;
+    --surface-secondary: #171C25;
+    --card: #1B212C;
+    --border: #232A37;
+    --border-soft: #1A2029;
+    --text-primary: #E9EDF4;
+    --text-secondary: #98A2B5;
+    --text-muted: #5B6478;
+    
+    --primary: #4C8DFF;
+    --primary-foreground: #ffffff;
+    --accent: #1C3A66;
+    --accent-foreground: #4C8DFF;
+    
+    --success: #2FD9A8;
+    --success-foreground: #000000;
+    --warning: #F5A623;
+    --warning-foreground: #000000;
+    --danger: #FF5A5F;
+    --danger-foreground: #ffffff;
   }
 }
 
@@ -41,7 +57,6 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-text-primary;
   }
 }

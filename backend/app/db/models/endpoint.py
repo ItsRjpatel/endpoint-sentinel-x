@@ -2,14 +2,14 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+if TYPE_CHECKING:
+    from app.db.models.command import Command
+    from app.db.models.organization import Organization
+
 from sqlalchemy import DateTime, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import BaseEntity
-
-if TYPE_CHECKING:
-    from app.db.models.organization import Organization
-
 
 class Endpoint(BaseEntity):
     """Model tracking enrolled endpoint agents, hardware details, and statuses."""

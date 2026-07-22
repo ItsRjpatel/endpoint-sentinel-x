@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/agent/register",
+    "/register",
     response_model=AgentRegisterResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new agent endpoint using an enrollment token",
@@ -95,7 +95,7 @@ async def register_agent(
 
 
 @router.post(
-    "/agent/heartbeat",
+    "/heartbeat",
     response_model=AgentHeartbeatResponse,
     summary="Record periodic agent heartbeat and update connection status",
 )
@@ -120,7 +120,7 @@ async def agent_heartbeat(
 
 
 @router.post(
-    "/agent/rotate-secret",
+    "/rotate-secret",
     response_model=AgentRotateSecretResponse,
     summary="Rotate the authenticated agent secret API key",
 )
@@ -139,7 +139,7 @@ async def rotate_agent_secret(
 
 
 @router.get(
-    "/agent/config",
+    "/config",
     response_model=AgentConfigResponse,
     summary="Fetch runtime configurations and policy metrics for the agent",
 )

@@ -1,13 +1,13 @@
 import asyncio
-import structlog
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-from app.db.models.command import Command
-from app.repositories.command import CommandRepository
+import structlog
 from shared.constants.ws_events import CommandStatus, WSEventType
-from app.schemas.ws import WSEnvelope
+
+from app.repositories.command import CommandRepository
 from app.schemas.command import CommandResponse
+from app.schemas.ws import WSEnvelope
 
 logger = structlog.get_logger()
 
@@ -57,20 +57,20 @@ class CommandDispatcher:
     async def _process_pending_commands(self):
         async with self.db_session_factory() as db:
             repo = CommandRepository(db)
-            
+
             # Atomically claims PENDING -> QUEUED
             commands = await repo.claim_pending_commands()
-            
+
             if commands:
                 await db.commit() # Commit the lock transition first
 
             for command in commands:
                 endpoint_id = str(command.endpoint_id)
-                
+
                 if not self.connection_manager.is_online(endpoint_id):
                     # We leave it as QUEUED. The timeout loop will eventually clean it up.
                     continue
-                
+
                 # Update status to SENT
                 command.status = CommandStatus.SENT
                 command.sent_at = datetime.now(UTC)
@@ -84,7 +84,7 @@ class CommandDispatcher:
                 )
 
                 success = await self.connection_manager.send(endpoint_id, envelope.model_dump(mode="json"))
-                
+
                 if success:
                     logger.info("Command dispatched", command_id=str(command.id), endpoint_id=endpoint_id)
                 else:
@@ -100,13 +100,13 @@ class CommandDispatcher:
             repo = CommandRepository(db)
             threshold = datetime.now(UTC) - timedelta(seconds=self.command_timeout_seconds)
             timed_out_commands = await repo.get_timed_out_commands(threshold)
-            
+
             for command in timed_out_commands:
                 command.status = CommandStatus.TIMEOUT
                 command.completed_at = datetime.now(UTC)
                 command.error = f"Command timed out after {self.command_timeout_seconds} seconds"
                 await repo.update(command)
-                
+
             if timed_out_commands:
                 await db.commit()
                 logger.warning("Processed command timeouts", count=len(timed_out_commands))
